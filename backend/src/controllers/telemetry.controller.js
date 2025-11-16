@@ -1,0 +1,256 @@
+import { validateTelemetry, validateManualReading, validateCalibration } from '../schemas/telemetry.schema.js';
+import sensorService from '../services/sensor.service.js';
+import readingService from '../services/reading.service.js';
+import compressionService from '../services/compression.service.js';
+import logger from '../config/logger.js';
+
+/**
+ * POST /api/telemetry
+ * Endpoint para receber telemetria dos nodes ESP32
+ */
+export async function receiveTelemetry(req, res) {
+  try {
+    // Validar payload
+    const validation = validateTelemetry(req.body);
+    
+    if (!validation.success) {
+      logger.warn('Telemetria inválida', { errors: validation.error.errors });
+      return res.status(400).json({
+        success: false,
+        error: 'Validação falhou',
+        details: validation.error.errors,
+      });
+    }
+    
+    const { node_mac, datetime, data, meta } = validation.data;
+    
+    const processedReadings = [];
+    
+    // Processar cada leitura do payload
+    for (const reading of data) {
+      const { label, value, unit } = reading;
+      
+      // Identificar sensor pelo MAC + variável
+      const sensor = await sensorService.identifySensorByMac(node_mac, label);
+      
+      if (!sensor) {
+        logger.warn(`Sensor desconhecido: MAC=${node_mac}, label=${label}`);
+        continue; // Pular leitura desconhecida
+      }
+      
+      // Inserir leitura bruta
+      await readingService.insertRawReading({
+        sensor_id: sensor.sensor_id,
+        elemento_id: sensor.elemento_id,
+        variavel: label,
+        valor: value,
+        unidade: unit || 'cm',
+        meta: {
+          ...meta,
+          node_mac,
+        },
+        fonte: 'sensor',
+        autor: node_mac,
+        modo: 'automatica',
+        observacao: null,
+        datetime: new Date(datetime),
+      });
+      
+      // Processar compressão assíncrona
+      compressionService.processCompression(
+        sensor,
+        value,
+        sensor.elemento_parametros,
+        new Date(datetime)
+      ).catch(err => {
+        logger.error('Erro no processamento assíncrono:', err);
+      });
+      
+      processedReadings.push({
+        sensor_id: sensor.sensor_id,
+        elemento_id: sensor.elemento_id,
+        valor: value,
+      });
+    }
+    
+    logger.info('Telemetria recebida', {
+      node_mac,
+      readings: processedReadings.length,
+    });
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Telemetria recebida com sucesso',
+      processed: processedReadings.length,
+    });
+    
+  } catch (error) {
+    logger.error('Erro ao receber telemetria:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor',
+    });
+  }
+}
+
+/**
+ * POST /api/manual-reading
+ * Endpoint para leituras manuais feitas por operadores
+ */
+export async function receiveManualReading(req, res) {
+  try {
+    // Validar payload
+    const validation = validateManualReading(req.body);
+    
+    if (!validation.success) {
+      logger.warn('Leitura manual inválida', { errors: validation.error.errors });
+      return res.status(400).json({
+        success: false,
+        error: 'Validação falhou',
+        details: validation.error.errors,
+      });
+    }
+    
+    const { sensor_id, value, variable, datetime, usuario, observacao } = validation.data;
+    
+    // Buscar sensor
+    const sensor = await sensorService.getSensorById(sensor_id);
+    
+    if (!sensor) {
+      logger.warn(`Sensor não encontrado: ${sensor_id}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Sensor não encontrado',
+      });
+    }
+    
+    // Inserir leitura bruta
+    await readingService.insertRawReading({
+      sensor_id: sensor.sensor_id,
+      elemento_id: sensor.elemento_id,
+      variavel: variable,
+      valor: value,
+      unidade: variable === 'nivel_cm' ? 'cm' : (variable === 'pressao_bar' ? 'bar' : 'lpm'),
+      meta: {
+        manual: true,
+      },
+      fonte: 'usuario',
+      autor: usuario,
+      modo: 'manual',
+      observacao,
+      datetime: datetime ? new Date(datetime) : new Date(),
+    });
+    
+    logger.info('Leitura manual recebida', {
+      sensor_id,
+      usuario,
+      valor: value,
+    });
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Leitura manual registrada com sucesso',
+    });
+    
+  } catch (error) {
+    logger.error('Erro ao receber leitura manual:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor',
+    });
+  }
+}
+
+/**
+ * POST /api/calibration
+ * Endpoint para registrar calibração de sensores
+ */
+export async function receiveCalibration(req, res) {
+  try {
+    // Validar payload
+    const validation = validateCalibration(req.body);
+    
+    if (!validation.success) {
+      logger.warn('Calibração inválida', { errors: validation.error.errors });
+      return res.status(400).json({
+        success: false,
+        error: 'Validação falhou',
+        details: validation.error.errors,
+      });
+    }
+    
+    const {
+      sensor_id,
+      valor_referencia,
+      valor_sensor,
+      responsavel_usuario_id,
+      tipo,
+      observacao,
+    } = validation.data;
+    
+    // Buscar sensor
+    const sensor = await sensorService.getSensorById(sensor_id);
+    
+    if (!sensor) {
+      logger.warn(`Sensor não encontrado: ${sensor_id}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Sensor não encontrado',
+      });
+    }
+    
+    // Calcular ajuste (offset)
+    const ajuste = valor_referencia - valor_sensor;
+    
+    // Registrar calibração
+    const query = `
+      INSERT INTO aguada.calibracoes (
+        sensor_id, elemento_id, responsavel_usuario_id,
+        valor_referencia, valor_sensor, ajuste_aplicado,
+        tipo, observacao
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING calibracao_id
+    `;
+    
+    const pool = (await import('../config/database.js')).default;
+    const result = await pool.query(query, [
+      sensor_id,
+      sensor.elemento_id,
+      responsavel_usuario_id,
+      valor_referencia,
+      valor_sensor,
+      ajuste,
+      tipo,
+      observacao,
+    ]);
+    
+    // Atualizar offset no sensor
+    await sensorService.updateSensorOffset(sensor_id, ajuste);
+    
+    logger.info('Calibração registrada', {
+      calibracao_id: result.rows[0].calibracao_id,
+      sensor_id,
+      ajuste,
+    });
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Calibração registrada com sucesso',
+      calibracao_id: result.rows[0].calibracao_id,
+      ajuste_aplicado: ajuste,
+    });
+    
+  } catch (error) {
+    logger.error('Erro ao registrar calibração:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor',
+    });
+  }
+}
+
+export default {
+  receiveTelemetry,
+  receiveManualReading,
+  receiveCalibration,
+};

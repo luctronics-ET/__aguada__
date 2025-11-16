@@ -1,0 +1,116 @@
+{
+  "sensors": [
+    {
+      "sensor_id": "SEN_CON_01",
+      "node_id": "node_04",
+      "mac_address": "AA:BB:CC:DD:EE:01",
+      "ativo_id": "res_cons",
+      "tipo": "ultrassonico",
+      "modelo": "AJ-SR04M",
+      "variavel": "nivel_cm",
+      "unidade": "cm",
+      "precisao_cm": 0.5,
+      "range_min_cm": 20,
+      "range_max_cm": 450,
+      "gpio_trig": 1,
+      "gpio_echo": 0,
+      "frequencia_leitura_sec": 10,
+      "ultima_calibracao": "2025-10-01T10:00:00-03:00",
+      "ajuste_offset_cm": 0,
+      "status": "ativo",
+      "coordenadas": {
+        "x": 150.3,
+        "y": 290.7,
+        "z": 4.5
+      }
+    },
+    {
+      "sensor_id": "SEN_CAV_01",
+      "node_id": "node_01",
+      "mac_address": "AA:BB:CC:DD:EE:02",
+      "ativo_id": "res_incendio",
+      "tipo": "ultrassonico",
+      "modelo": "AJ-SR04M",
+      "variavel": "nivel_cm",
+      "unidade": "cm",
+      "precisao_cm": 0.5,
+      "range_min_cm": 20,
+      "range_max_cm": 450,
+      "gpio_trig": 1,
+      "gpio_echo": 0,
+      "frequencia_leitura_sec": 10,
+      "ultima_calibracao": "2025-10-01T10:00:00-03:00",
+      "ajuste_offset_cm": 0,
+      "status": "ativo"
+    },
+    {
+      "sensor_id": "SEN_IE01_01",
+      "node_id": "node_03",
+      "mac_address": "AA:BB:CC:DD:EE:03",
+      "ativo_id": "cisterna_ie01",
+      "tipo": "ultrassonico",
+      "modelo": "AJ-SR04M",
+      "variavel": "nivel_cm",
+      "unidade": "cm",
+      "gpio_trig": 1,
+      "gpio_echo": 0,
+      "frequencia_leitura_sec": 15,
+      "ultima_calibracao": "2025-10-01T10:00:00-03:00",
+      "status": "ativo"
+    },
+    {
+      "sensor_id": "SEN_IE02_01",
+      "node_id": "node_03",
+      "mac_address": "AA:BB:CC:DD:EE:03",
+      "ativo_id": "cisterna_ie02",
+      "tipo": "ultrassonico",
+      "modelo": "AJ-SR04M",
+      "variavel": "nivel_cm",
+      "unidade": "cm",
+      "gpio_trig": 4,
+      "gpio_echo": 3,
+      "frequencia_leitura_sec": 15,
+      "ultima_calibracao": "2025-10-01T10:00:00-03:00",
+      "status": "ativo"
+    }
+  ],
+  "calibration_procedure": {
+    "descricao": "Procedimento padrão de calibração de sensores ultrassônicos",
+    "passos": [
+      "1. Desligar bombas e aguardar estabilização (5 min)",
+      "2. Medir nível com régua física (precisão ±0.5cm)",
+      "3. Registrar valor de referência",
+      "4. Coletar 20 leituras do sensor (intervalo 2s)",
+      "5. Calcular mediana das leituras",
+      "6. Calcular offset: referencia - mediana",
+      "7. Aplicar offset na configuração do node",
+      "8. Registrar calibração no banco de dados",
+      "9. Validar com nova medição após 1 hora"
+    ],
+    "frequencia_recomendada": "trimestral",
+    "condicoes": "Sem bombeamento ativo, sem vento forte"
+  },
+  "node_mapping": {
+    "node_04": {
+      "mac": "AA:BB:CC:DD:EE:01",
+      "name": "Node Castelo Consumo",
+      "location": "CON - Cobertura Bloco A",
+      "sensors": ["SEN_CON_01"],
+      "firmware_version": "1.0.0"
+    },
+    "node_01": {
+      "mac": "AA:BB:CC:DD:EE:02",
+      "name": "Node Castelo Incêndio",
+      "location": "CAV - Cobertura Bloco B",
+      "sensors": ["SEN_CAV_01"],
+      "firmware_version": "1.0.0"
+    },
+    "node_03": {
+      "mac": "AA:BB:CC:DD:EE:03",
+      "name": "Node Cisternas IE",
+      "location": "IE - Subsolo",
+      "sensors": ["SEN_IE01_01", "SEN_IE02_01"],
+      "firmware_version": "1.0.0"
+    }
+  }
+}

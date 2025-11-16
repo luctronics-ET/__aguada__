@@ -1,0 +1,116 @@
+{
+  "thresholds": {
+    "compression": {
+      "deadband_cm": 2.0,
+      "deadband_percent": 0.5,
+      "window_size_samples": 11,
+      "stability_stddev": 0.5,
+      "max_interval_sec": 300
+    },
+    "events": {
+      "abastecimento": {
+        "min_delta_volume_l": 50,
+        "min_duration_sec": 300,
+        "required_conditions": ["bomba_on", "valvula_entrada_aberta"]
+      },
+      "consumo": {
+        "min_delta_volume_l": 10,
+        "period_analysis_hours": 24,
+        "periods": {
+          "residual": { "start": "00:00", "end": "06:00", "threshold_l_h": 5 },
+          "pico": { "start": "06:00", "end": "12:00", "threshold_l_h": 50 },
+          "operacional": { "start": "12:00", "end": "18:00", "threshold_l_h": 30 },
+          "reducao": { "start": "18:00", "end": "24:00", "threshold_l_h": 20 }
+        }
+      },
+      "vazamento": {
+        "min_duration_hours": 1,
+        "max_rate_l_h": -15,
+        "required_conditions": ["bombas_off", "valvulas_saida_fechadas"],
+        "alert_levels": {
+          "leve": { "rate_l_h": -10, "nivel": "INFO" },
+          "moderado": { "rate_l_h": -20, "nivel": "WARNING" },
+          "grave": { "rate_l_h": -50, "nivel": "CRITICAL" }
+        }
+      },
+      "nivel_critico_incendio": {
+        "reservoir_id": "res_incendio",
+        "threshold_percent": 70,
+        "duration_min": 10,
+        "alert_level": "CRITICAL",
+        "notification_channels": ["email", "sms", "dashboard"]
+      },
+      "sensor_fault": {
+        "stuck_reading_duration_min": 60,
+        "out_of_range_tolerance": 0,
+        "jitter_max_stddev": 10,
+        "timeout_sec": 300
+      }
+    },
+    "data_quality": {
+      "nivel_cm": {
+        "min": 0,
+        "max": 450,
+        "typical_range": [20, 400]
+      },
+      "battery_v": {
+        "min": 2.5,
+        "max": 4.2,
+        "critical": 2.8,
+        "warning": 3.0
+      },
+      "rssi_dbm": {
+        "min": -120,
+        "max": 0,
+        "poor": -90,
+        "fair": -75,
+        "good": -60
+      }
+    },
+    "alerts": {
+      "nivel_critico": {
+        "percent": 10,
+        "severity": "CRITICAL",
+        "cooldown_min": 30
+      },
+      "nivel_alerta": {
+        "percent": 20,
+        "severity": "WARNING",
+        "cooldown_min": 60
+      },
+      "consumo_anormal": {
+        "deviation_percent": 50,
+        "severity": "WARNING"
+      },
+      "sensor_offline": {
+        "timeout_min": 10,
+        "severity": "WARNING"
+      },
+      "bateria_baixa": {
+        "voltage": 3.0,
+        "severity": "WARNING"
+      }
+    },
+    "telemetry": {
+      "report_interval_sec": 30,
+      "read_interval_sec": 10,
+      "median_samples": 11,
+      "max_retries": 3,
+      "retry_backoff_sec": 5
+    }
+  },
+  "constants": {
+    "physical": {
+      "rho_agua_kg_m3": 1000,
+      "g_m_s2": 9.81,
+      "velocidade_som_m_s": 343
+    },
+    "units": {
+      "volume": "m³",
+      "nivel": "cm",
+      "pressao": "bar",
+      "vazao": "L/min",
+      "temperatura": "°C"
+    }
+  }
+}

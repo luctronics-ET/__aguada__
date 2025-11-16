@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # PostgreSQL + TimescaleDB
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: aguada_postgres
+    environment:
+      POSTGRES_DB: aguada
+      POSTGRES_USER: aguada_user
+      POSTGRES_PASSWORD: aguada_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - aguada_network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: aguada_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aguada_network
+    restart: unless-stopped
+
+  # MQTT Broker (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: aguada_mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - aguada_network
+    restart: unless-stopped
+
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: aguada_backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: aguada
+      DB_USER: aguada_user
+      DB_PASSWORD: aguada_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MQTT_BROKER: mqtt://mosquitto:1883
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+      - mosquitto
+    networks:
+      - aguada_network
+    restart: unless-stopped
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aguada_grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../dashboard/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - postgres
+    networks:
+      - aguada_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+
+networks:
+  aguada_network:
+    driver: bridge

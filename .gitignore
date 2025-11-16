@@ -1,0 +1,46 @@
+# Arquivos de build
+node_modules/
+dist/
+build/
+*.o
+*.a
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ESP-IDF
+firmware/**/build/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old
+
+# Backups
+backups/
+*.backup
+*.bak
+
+# Database
+*.sql.gz
+*.dump
+
+# Temporários
+tmp/
+temp/
+*.tmp

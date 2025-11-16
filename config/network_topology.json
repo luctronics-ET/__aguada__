@@ -1,0 +1,151 @@
+{
+  "network_topology": {
+    "elementos": [
+      {
+        "id": "res_cons",
+        "tipo": "reservatorio",
+        "nome": "Castelo Consumo",
+        "portas": [
+          { "id": "in01", "tipo": "entrada", "descricao": "Entrada principal IE" },
+          { "id": "out_az", "tipo": "saida", "descricao": "Saída Área Azul" },
+          { "id": "out_av", "tipo": "saida", "descricao": "Saída Área Vermelha" }
+        ]
+      },
+      {
+        "id": "res_incendio",
+        "tipo": "reservatorio",
+        "nome": "Castelo Incêndio",
+        "portas": [
+          { "id": "in01", "tipo": "entrada", "descricao": "Entrada B03" },
+          { "id": "out_az", "tipo": "saida", "descricao": "Saída rede hidrantes" }
+        ]
+      },
+      {
+        "id": "cisterna_ie01",
+        "tipo": "reservatorio",
+        "nome": "Cisterna IE 01",
+        "portas": [
+          { "id": "in01", "tipo": "entrada", "descricao": "Entrada IF" },
+          { "id": "out_con", "tipo": "saida", "descricao": "Saída para CON" },
+          { "id": "out_cav", "tipo": "saida", "descricao": "Saída para CAV" }
+        ]
+      },
+      {
+        "id": "cisterna_ie02",
+        "tipo": "reservatorio",
+        "nome": "Cisterna IE 02",
+        "portas": [
+          { "id": "in01", "tipo": "entrada", "descricao": "Entrada IF" },
+          { "id": "out_con", "tipo": "saida", "descricao": "Saída para CON" },
+          { "id": "out_cav", "tipo": "saida", "descricao": "Saída para CAV" }
+        ]
+      },
+      {
+        "id": "bomba_b03",
+        "tipo": "bomba",
+        "nome": "Casa de Bombas N03",
+        "portas": [
+          { "id": "in01", "tipo": "entrada", "descricao": "Entrada IE" },
+          { "id": "out_con", "tipo": "saida", "descricao": "Saída CON" },
+          { "id": "out_cav", "tipo": "saida", "descricao": "Saída CAV" }
+        ],
+        "parametros": {
+          "potencia_kw": 5.0,
+          "vazao_nominal_l_min": 500,
+          "pressao_nominal_bar": 3.5
+        }
+      },
+      {
+        "id": "valv_entrada_ie",
+        "tipo": "valvula",
+        "nome": "Válvula Entrada IE→CON",
+        "portas": [
+          { "id": "in", "tipo": "entrada" },
+          { "id": "out", "tipo": "saida" }
+        ]
+      },
+      {
+        "id": "valv_saida_az",
+        "tipo": "valvula",
+        "nome": "Válvula Saída Área Azul",
+        "portas": [
+          { "id": "in", "tipo": "entrada" },
+          { "id": "out", "tipo": "saida" }
+        ]
+      },
+      {
+        "id": "valv_saida_av",
+        "tipo": "valvula",
+        "nome": "Válvula Saída Área Vermelha",
+        "portas": [
+          { "id": "in", "tipo": "entrada" },
+          { "id": "out", "tipo": "saida" }
+        ]
+      }
+    ],
+    "conexoes": [
+      {
+        "id": "conn_01",
+        "origem": "cisterna_ie01.out_con",
+        "destino": "valv_entrada_ie.in",
+        "ativo": true,
+        "descricao": "IE01 → Válvula entrada CON"
+      },
+      {
+        "id": "conn_02",
+        "origem": "valv_entrada_ie.out",
+        "destino": "res_cons.in01",
+        "ativo": true,
+        "descricao": "Válvula → CON entrada"
+      },
+      {
+        "id": "conn_03",
+        "origem": "res_cons.out_az",
+        "destino": "valv_saida_az.in",
+        "ativo": true,
+        "descricao": "CON → Válvula Área Azul"
+      },
+      {
+        "id": "conn_04",
+        "origem": "res_cons.out_av",
+        "destino": "valv_saida_av.in",
+        "ativo": true,
+        "descricao": "CON → Válvula Área Vermelha"
+      },
+      {
+        "id": "conn_05",
+        "origem": "cisterna_ie01.out_cav",
+        "destino": "bomba_b03.in01",
+        "ativo": true,
+        "descricao": "IE01 → Bomba B03"
+      },
+      {
+        "id": "conn_06",
+        "origem": "bomba_b03.out_cav",
+        "destino": "res_incendio.in01",
+        "ativo": true,
+        "descricao": "Bomba B03 → CAV"
+      }
+    ],
+    "regras_fluxo": {
+      "descricao": "Água só flui se válvulas intermediárias estão ABERTAS e bombas estão ON",
+      "condicoes": [
+        {
+          "rota": "IE01 → CON",
+          "elementos_intermediarios": ["valv_entrada_ie"],
+          "condicao": "valv_entrada_ie.estado == 'ABERTA'"
+        },
+        {
+          "rota": "CON → Área Azul",
+          "elementos_intermediarios": ["valv_saida_az"],
+          "condicao": "valv_saida_az.estado == 'ABERTA'"
+        },
+        {
+          "rota": "IE01 → CAV",
+          "elementos_intermediarios": ["bomba_b03"],
+          "condicao": "bomba_b03.estado == 'ON'"
+        }
+      ]
+    }
+  }
+}
