@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL com TimescaleDB
+  postgres:
+    image: timescaledev/timescaledb:latest-pg15
+    container_name: aguada-postgres
+    environment:
+      POSTGRES_USER: aguada_user
+      POSTGRES_PASSWORD: aguada_pass_2025
+      POSTGRES_DB: aguada_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/sample-data.sql:/docker-entrypoint-initdb.d/02-sample-data.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aguada_user -d aguada_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aguada-net
+
+  # Redis para cache/sessions
+  redis:
+    image: redis:7-alpine
+    container_name: aguada-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aguada-net
+
+  # Backend Node.js
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aguada-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: aguada_user
+      DB_PASSWORD: aguada_pass_2025
+      DB_NAME: aguada_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
+      CORS_ORIGIN: "*"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/logs:/app/logs
+    networks:
+      - aguada-net
+    restart: unless-stopped
+
+  # Nginx para servir frontend + proxy backend
+  nginx:
+    image: nginx:alpine
+    container_name: aguada-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend:/usr/share/nginx/html/aguada
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    networks:
+      - aguada-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  aguada-net:
+    driver: bridge

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGUADA Dashboard - Monitoramento Hidráulico</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💧 AGUADA Dashboard</h1>
+            <div class="header-info">
+                <div>Sistema de Monitoramento Hidráulico</div>
+                <div class="status-badge status-online pulsing">● Online</div>
+            </div>
+        </header>
+
+        <div class="dashboard-grid" id="dashboardGrid">
+            <div style="grid-column: 1/-1; text-align: center; color: #999; padding: 40px;">
+                ⏳ Carregando dados...
+            </div>
+        </div>
+
+        <div class="stats-footer">
+            <div class="stat">
+                <div class="stat-value" id="totalSensors">5</div>
+                <div class="stat-label">Sensores Ativos</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="totalReadings">0</div>
+                <div class="stat-label">Leituras Hoje</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="avgStorage">0%</div>
+                <div class="stat-label">Nível Médio</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="lastSync">-</div>
+                <div class="stat-label">Última Sincronização</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/app.js"></script>
+    <script>
+        // Initialize dashboard
+        function init() {
+            renderDashboard();
+            pollData();
+            setInterval(pollData, POLL_INTERVAL);
+        }
+
+        // Render dashboard cards
+        function renderDashboard() {
+            const dashboard = document.getElementById('dashboardGrid');
+            dashboard.innerHTML = Object.entries(SENSORS).map(([id, sensor]) => {
+                const reading = latestReadings[id] || {
+                    distance_cm: 0,
+                    valve_in: 0,
+                    valve_out: 0,
+                    sound_in: 0,
+                    battery: 5000,
+                    rssi: -50,
+                    timestamp: null
+                };
+                
+                const volumePercent = getVolumePercent(id, reading.distance_cm);
+
+                return `
+                    <div class="card">
+                        <div class="card-header ${id.toLowerCase()}">
+                            <span>${sensor.name}</span>
+                            <span class="status-badge ${reading.timestamp ? 'status-online' : 'status-offline'}">
+                                ${reading.timestamp ? '● Online' : '● Offline'}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            ${reading.timestamp && (
+                                reading.distance_cm === 0 || reading.distance_cm === 1
+                            ) ? `
+                                <div class="alert alert-warning">
+                                    ⚠️ Sensor pode estar com falha (erro: ${reading.distance_cm === 0 ? 'timeout' : 'out of range'})
+                                </div>
+                            ` : ''}
+
+                            <div class="gauge" style="background: linear-gradient(to right, ${getGaugeColor(volumePercent)})">
+                                ${volumePercent.toFixed(1)}%
+                            </div>
+
+                            <div class="data-row">
+                                <div class="data-item">
+                                    <div class="data-label">Distância</div>
+                                    <div class="data-value">
+                                        ${(reading.distance_cm / 100).toFixed(2)}
+                                        <span class="data-unit">cm</span>
+                                    </div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Volume</div>
+                                    <div class="data-value">
+                                        ${volumePercent.toFixed(1)}
+                                        <span class="data-unit">%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="data-row">
+                                <div class="data-item">
+                                    <div class="data-label">Válvula Entrada</div>
+                                    <div class="data-value">${reading.valve_in ? '🟢 Aberta' : '🔴 Fechada'}</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Válvula Saída</div>
+                                    <div class="data-value">${reading.valve_out ? '🟢 Aberta' : '🔴 Fechada'}</div>
+                                </div>
+                            </div>
+
+                            <div class="data-row">
+                                <div class="data-item">
+                                    <div class="data-label">Fluxo</div>
+                                    <div class="data-value">${reading.sound_in ? '💧 Sim' : '⏹️ Não'}</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">RSSI</div>
+                                    <div class="data-value">${reading.rssi ? reading.rssi + ' dBm' : '-'}</div>
+                                </div>
+                            </div>
+
+                            <div class="last-update">
+                                ${reading.timestamp ? `Última atualização: ${formatTime(reading.timestamp)}` : 'Aguardando dados...'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Poll for new data
+        async function pollData() {
+            await fetchLatestReadings();
+            updateStats();
+            renderDashboard();
+        }
+
+        // Update statistics footer
+        function updateStats() {
+            document.getElementById('totalSensors').textContent = Object.keys(SENSORS).length;
+            document.getElementById('lastSync').textContent = formatDateTime(new Date());
+            
+            // Calculate average volume
+            const volumes = Object.keys(SENSORS).map(id => {
+                const reading = latestReadings[id] || { distance_cm: 0 };
+                return getVolumePercent(id, reading.distance_cm);
+            });
+            const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+            document.getElementById('avgStorage').textContent = avgVolume.toFixed(1) + '%';
+        }
+
+        // Start dashboard
+        init();
+    </script>
+</body>
+</html>

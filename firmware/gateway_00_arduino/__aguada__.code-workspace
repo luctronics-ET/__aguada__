@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"name": "__aguada__",
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"idf.pythonInstallPath": "/usr/bin/python",
+		"idf.flashType": "JTAG"
+	}
+}

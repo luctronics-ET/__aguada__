@@ -1,0 +1,1560 @@
+AGUADA_REF_DEF_RULES 
+
+Aguada - botão principal
+pre loader ícone aguada
+
+pag supervisório ícone usado em painel de controle)
+consumo do dia atual do castelo de consumo (T) (somatório dos consumos parciais(diferença de volume entre leituras do dia)
+se volume atual >= volume anterior, consumo parcial == 0;
+se volume atual < volume anterior, consumo parcial = vol anterior - vol atual;
+tendencia = comparações com a media de consumo do quarto de hora - alto, normal, baixo, vazamento (consumo muito alto)
+consumo diário += consumo parcial
+
+titulo aba navegador: CMASM - Aguada
+
+sub paginas:
+
+pagina CMASM Aguada
+gráfico linha  do volume castelo consumo, eixos: 0- vol total / percentual, período de 24 h ate agora) e do consumo diário no mesmo gráfico   ocupar toda largura do contente desde side bar ate canto direito
+
+data table resumo
+consumo diário T ícone tendencia
+volume atual do castelo consumo  % T
+volume atual castelo incêndio % T
+volume atual cisternas IF % T
+
+data table resumo controles de qualidade
+
+data table status reservatorios
+
+tabelas bombas 
+tabela válvulas (botões trigger com feed back) usuário pode alterar manualmente.
+
+tabela 
+cada quarto( 00-04h, 04h-08h, 08h-12h, 12h-16h, 16-20h, 20-24h)
+consumo diário T
+volume 
+
+alertas ativos
+
+
+pagina aguada | Registros: - ler dados detalhados
+gráfico
+tabelas com as leituras e dados
+
+
+pagina aguada | manutenção - verificar integridade e estado dos equipamentos do sistema
+datatable sobre status sensores, bombas, válvulas
+
+datatable manutenção sensores, bombas, válvulas
+
+datatable ultimas verificações/manutenções
+
+
+
+
+node01
+CON
+Castelo de Consumo
+reservatório de 80 ton de agua para consumo;
+válvula de entrada CON: recebe agua das cisternas IE 01 e 02,
+válvula de saída CON: envia agua para Area azul (AZ); 
+
+
+node02
+CAV
+Castelo de Incendio
+reservatório de 80 ton de agua para rede de combate a incendio;
+válvula de entrada CAV: recebe agua da casa de bombas N03
+válvula de saída CAV: envia agua para rede de incêndio (rede CAVAZ); 
+
+
+
+node03
+B03
+Casa de Bombas N03
+reservatório de 80 ton de agua para bombeamento para CON ou CAV;
+válvula de entrada B03: recebe agua das cisternas IE 01 e 02 ,
+válvula de saída B03
+
+node04
+Cisterna IE 01 - reservatório de 250 ton de agua;
+válvula de saída IE01: envia agua para Casa de Bombas N03
+válvula de entrada IE01: cisterna IE 02 recebe agua das cisternas IF
+
+node05
+Cisterna IE 02 - reservatório de 250 ton de agua;
+válvula de saída IE02: envia agua para Casa de Bombas N03
+válvula de entrada IE02: cisterna IE 02 recebe agua das cisternas IF
+
+
+
+
+// Função para calcular volume baseado na distância
+static float calculate_volume_m3(uint16_t distance_cm) {
+    // Calcular altura da água (altura total - distância medida - offset do sensor)
+    int water_height_cm = RESERVOIR_HEIGHT_CM - distance_cm + SENSOR_OFFSET_CM;
+    
+    if (water_height_cm <= 0) {
+        return 0.0; // Reservatório vazio
+    }
+    
+    if (water_height_cm > RESERVOIR_HEIGHT_CM) {
+        water_height_cm = RESERVOIR_HEIGHT_CM; // Limitar à altura máxima
+    }
+    
+    // Calcular percentual da altura
+    float height_percentage = (float)water_height_cm / RESERVOIR_HEIGHT_CM;
+    
+    // Volume = capacidade_total * percentual_altura
+    float volume_m3 = RESERVOIR_CAPACITY_M3 * height_percentage;
+    
+    ESP_LOGD(TAG, "Altura água: %d cm, Percentual: %.2f%%, Volume: %.2f m³", 
+             water_height_cm, height_percentage * 100, volume_m3);
+    
+    return volume_m3;
+}
+
+
+
+
+
+
+### Topologia inicial detalhada
+
+#### ESP 01 — Castelo de Consumo
+- **Reservatório**: 80 t (≈ 80 m³), com medição de nível por ultrassom.
+- **Válvulas**: entrada (das cisternas IE01/IE02), saída AZ (Área Azul), saída AV (Área Vermelha).
+- **Bombas/Pressão**: opcional leitura de pressão na rede de consumo para diagnóstico.
+- **Sugestões de I/O**:  
+  - **Ultrassom** JSN-SR04T (à prova d’água) em 5 V; usar divisor no pino ECHO para 3,3 V.  
+  - **Entradas digitais** para estados de válvulas (contato seco) com optoacoplador e debounce.  
+  - **Amostragem**: leitura a cada 10 s; publicar a cada 30 s ou sob variação relevante.
+
+#### ESP 02 — Castelo de Incêndio
+- **Reservatório**: 80 t (≈ 80 m³), medição de nível por ultrassom.
+- **Válvulas**: entrada (IE01/IE02), saída AZ (rede CAV AZ).
+- **Bombas/Pressão**: recomendável pressão na rede de incêndio para detecção de quedas.
+- **I/O e amostragem**: iguais ao ESP 01; avaliar taxa maior (5 s) para alarmes críticos.
+
+#### ESP 03 — Cisternas IE
+- **Reservatórios**: IE01 e IE02, 250 t cada (≈ 250 m³ cada), 2 medições de nível por ultrassom.
+- **Válvulas**: saída CON (para castelo de consumo), saída CAV (para castelo de incêndio), entrada 01 (de IF para IE01), entrada 02 (de IF para IE02).
+- **I/O**: duas medições de nível independentes + entradas digitais para 4 válvulas.
+- **Amostragem**: nível a cada 15 s; publicar a cada 60 s ou sob variação.
+
+> Observação: 1 t de água ≈ 1 m³. Para converter nível em volume, definimos área de seção transversal ou uma tabela de calibração específica do reservatório.
+
+---
+
+### Nomenclatura, tópicos MQTT e payloads
+
+#### Identidades e tópicos
+- **Site**: xaguada/site-a (ajuste conforme necessário).
+- **Nós**:  
+  - ESP01 → xaguada/site-a/consumo  
+  - ESP02 → xaguada/site-a/incendio  
+  - ESP03 → xaguada/site-a/cisternas  
+  - Gateway → xaguada/site-a/gateway
+
+- **Tópicos**:
+  - **Telemetria**: xaguada/site-a/<no>/telemetry
+  - **Eventos/Alarmes**: xaguada/site-a/<no>/events
+  - **Comandos**: xaguada/site-a/<no>/cmd
+  - **Estado do nó**: xaguada/site-a/<no>/status
+
+> QoS: use QoS 1 para telemetria e eventos; retenção apenas para “status” e última configuração.
+
+#### Payloads de telemetria (exemplos)
+
+- **ESP01 (consumo)**:
+```json
+{
+  "device_id": "consumo",
+  "ts": "2025-08-31T22:10:00Z",
+  "nivel_cm": 245,
+  "volume_m3": 62.3,
+  "pressao_bar": 3.1,
+  "valvulas": { "entrada": 1, "saida_az": 0, "saida_av": 1 },
+  "bombas": {},
+  "rssi": -65,
+  "fw": "1.0.0"
+}
+```
+
+- **ESP02 (incêndio)**:
+```json
+{
+  "device_id": "incendio",
+  "ts": "2025-08-31T22:10:02Z",
+  "nivel_cm": 240,
+  "volume_m3": 60.9,
+  "pressao_bar": 7.5,
+  "valvulas": { "entrada": 1, "saida_az": 1 },
+  "rssi": -63,
+  "fw": "1.0.0"
+}
+```
+
+- **ESP03 (cisternas)**:
+```json
+{
+  "device_id": "cisternas",
+  "ts": "2025-08-31T22:10:05Z",
+  "nivel_cm": { "ie01": 290, "ie02": 275 },
+  "volume_m3": { "ie01": 210.5, "ie02": 199.2 },
+  "valvulas": { "saida_con": 1, "saida_cav": 0, "entrada_01": 1, "entrada_02": 0 },
+  "rssi": -60,
+  "fw": "1.0.0"
+}
+```
+
+#### Comandos e configuração
+- **Comando**:
+```json
+{
+  "target": "consumo",
+  "cmd": "set_interval",
+  "value": 10
+}
+```
+
+- **Configuração remota** (publicado pelo backend, consumido pelo nó):
+```json
+{
+  "target": "cisternas",
+  "cmd": "set_config",
+  "value": {
+    "report_sec": 60,
+    "sensor": {
+      "ie01": { "h_max_cm": 320, "area_m2": 0.78 },
+      "ie02": { "h_max_cm": 320, "area_m2": 0.78 }
+    },
+    "alarms": { "low_pct": 20, "critical_pct": 10 }
+  }
+}
+```
+
+---
+
+### Cálculos e regras de alarme
+
+#### Cálculo de volume a partir do nível
+- **Tanque prismático**:
+  
+  \[
+  V\,(m^3) = A\,(m^2) \cdot h\,(m)
+  \]
+  
+- **Tanque cilíndrico vertical**:
+  
+  \[
+  V\,(m^3) = \pi r^2 \cdot h
+  \]
+
+- **Calibração por tabela**: se o tanque não for regular, use pares \((h, V)\) e faça interpolação linear.
+
+#### Derivadas e taxas para diagnóstico
+- **Taxa de variação do nível**:
+  
+  \[
+  \Delta h/\Delta t = \frac{h_{t} - h_{t-\Delta t}}{\Delta t}
+  \]
+  
+- **Estimativa de vazão pela seção** (aproximação):
+  
+  \[
+  Q\,(m^3/s) \approx A \cdot \frac{\Delta h}{\Delta t}
+  \]
+
+#### Regras de alarme (iniciais)
+- **Baixo nível**: volume < 20% → Alerta; < 10% → Crítico.
+- **Queda rápida (possível vazamento)**: \(|\Delta h/\Delta t| >\) limiar por N amostras consecutivas.
+- **Contradição de válvula**: válvula “aberta” sem variação de nível/pressão em T segundos.
+- **Falha de bomba**: comando ON sem aumento de pressão em até 5 s.
+- **Rede de incêndio**: pressão < limiar mínimo por > 10 s mesmo com válvulas fechadas → investigar vazamento/ruptura.
+- **Sensor anômalo**: leitura fora de faixa, eco do ultrassom perdido, jitter alto → “sensor_fault”.
+
+> Filtragem: use uma média móvel exponencial (EMA) nas leituras de nível e pressão para reduzir falsos positivos antes da derivada.
+
+---
+
+### Firmware base do nó e do gateway
+
+#### Estrutura de configuração no nó (SPIFFS/LittleFS)
+```json
+{
+  "device_id": "consumo",
+  "report_sec": 30,
+  "read_sec": 10,
+  "ultrassom": { "trig": 4, "echo": 5, "h_sensor_cm": 1000, "h_zero_cm": 50, "avg": 5 },
+  "digital": {
+    "valvulas": { "entrada": 8, "saida_az": 9, "saida_av": 10 },
+    "invert": true,
+    "debounce_ms": 50
+  },
+  "area_m2": 0.78
+}
+```
+
+#### Nó de sensor — leitura e envio via painlessMesh (protótipo)
+```cpp
+#include <Arduino.h>
+#include <painlessMesh.h>
+#include <ArduinoJson.h>
+
+#define MESH_PREFIX   "xaguada"
+#define MESH_PASSWORD "x@gu@d@2025"
+#define MESH_PORT     5555
+
+painlessMesh mesh;
+
+const int PIN_TRIG = 4, PIN_ECHO = 5;
+const int PIN_V_IN = 8, PIN_V_AZ = 9, PIN_V_AV = 10;
+
+unsigned long lastRead = 0, lastPublish = 0;
+const uint32_t READ_MS = 10000;    // 10 s
+const uint32_t PUB_MS  = 30000;    // 30 s
+
+float emaLevel = NAN;
+const float alpha = 0.3; // EMA
+
+long readUltrasonicCM() {
+  digitalWrite(PIN_TRIG, LOW); delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH); delayMicroseconds(10);
+  digitalWrite(PIN_TRIG, LOW);
+  long dur = pulseIn(PIN_ECHO, HIGH, 30000); // timeout 30 ms
+  if (dur == 0) return -1;
+  // Velocidade do som ~0.034 cm/us ida e volta
+  long cm = (dur * 0.034) / 2;
+  return cm;
+}
+
+void setup() {
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  pinMode(PIN_V_IN, INPUT_PULLUP);
+  pinMode(PIN_V_AZ, INPUT_PULLUP);
+  pinMode(PIN_V_AV, INPUT_PULLUP);
+
+  mesh.setDebugMsgTypes(ERROR | STARTUP);
+  mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
+}
+
+void loop() {
+  mesh.update();
+  unsigned long now = millis();
+
+  static int v_in = 0, v_az = 0, v_av = 0;
+
+  if (now - lastRead >= READ_MS) {
+    lastRead = now;
+    long dist_cm = readUltrasonicCM();
+    if (dist_cm > 0) {
+      float level_cm = dist_cm; // ajuste: converter distância ao espelho d'água em nível útil
+      emaLevel = isnan(emaLevel) ? level_cm : (alpha * level_cm + (1 - alpha) * emaLevel);
+    }
+    // Debounce simples por amostragem periódica
+    v_in = digitalRead(PIN_V_IN) == LOW ? 1 : 0;
+    v_az = digitalRead(PIN_V_AZ) == LOW ? 1 : 0;
+    v_av = digitalRead(PIN_V_AV) == LOW ? 1 : 0;
+  }
+
+  if (now - lastPublish >= PUB_MS) {
+    lastPublish = now;
+    StaticJsonDocument<256> doc;
+    doc["device_id"] = "consumo";
+    doc["ts"] = (uint32_t) (millis()/1000);
+    if (!isnan(emaLevel)) doc["nivel_cm"] = (int) round(emaLevel);
+    JsonObject valvs = doc.createNestedObject("valvulas");
+    valvs["entrada"] = v_in; valvs["saida_az"] = v_az; valvs["saida_av"] = v_av;
+
+    char buf[256];
+    size_t n = serializeJson(doc, buf);
+    mesh.sendBroadcast(String(buf, n));
+  }
+}
+```
+
+#### Gateway root — bridge mesh → MQTT e comandos
+```cpp
+#include <Arduino.h>
+#include <painlessMesh.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+#define MESH_PREFIX   "xaguada"
+#define MESH_PASSWORD "x@gu@d@2025"
+#define MESH_PORT     5555
+
+const char* STA_SSID = "LAN_LOCAL";
+const char* STA_PASS = "SENHA";
+const char* MQTT_HOST = "192.168.1.50";
+const uint16_t MQTT_PORT = 1883;
+
+painlessMesh mesh;
+WiFiClient net;
+PubSubClient mqtt(net);
+
+void onMeshReceive(uint32_t from, String &msg) {
+  if (!mqtt.connected()) { mqtt.connect("xaguada-gateway"); }
+  mqtt.publish("xaguada/site-a/gateway/raw", msg.c_str());
+  // Opcional: inspecionar payload e rotear para tópicos específicos.
+}
+
+void onMqttMsg(char* topic, byte* payload, unsigned int len) {
+  // Encaminhar comandos do MQTT para a malha
+  String cmd = String((char*)payload, len);
+  mesh.sendBroadcast(cmd);
+}
+
+void setup() {
+  mesh.setDebugMsgTypes(ERROR | STARTUP);
+  mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
+  mesh.onReceive(&onMeshReceive);
+
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(STA_SSID, STA_PASS);
+
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  mqtt.setCallback(onMqttMsg);
+  // Assinar comandos gerais
+  mqtt.connect("xaguada-gateway");
+  mqtt.subscribe("xaguada/site-a/+/cmd");
+}
+
+void loop() {
+  mesh.update();
+  if (WiFi.status() == WL_CONNECTED) mqtt.loop();
+}
+```
+
+> Produção: migrar para ESP-IDF/esp-mesh + esp-mqtt, adicionar buffer local, QoS 1, reconexão exponencial e OTA.
+
+---
+
+### Backend local offline (Docker) e fluxo
+
+#### docker-compose para o stack local
+```yaml
+version: "3.8"
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883", "9001:9001"]
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+
+  nodered:
+    image: nodered/node-red:latest
+    ports: ["1880:1880"]
+    volumes: ["./nodered:/data"]
+    depends_on: ["mosquitto"]
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2
+    ports: ["8086:8086"]
+    volumes: ["./influxdb:/var/lib/influxdb2"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    volumes: ["./grafana:/var/lib/grafana"]
+    depends_on: ["influxdb"]
+    restart: unless-stopped
+```
+
+- **Mosquitto**: habilite listener 1883 (MQTT) e opcional 9001 (WebSocket) para o dashboard.
+- **Node-RED**:
+  - **Fluxo**: MQTT-in (telemetry) → valida JSON → enriquecimento (volume, % nível) → grava InfluxDB → regras de alarme → MQTT-out (events) + notificação (e-mail/Telegram).
+  - **Config**: um fluxo por nó (consumo, incendio, cisternas) e um fluxo comum de alarmes.
+- **InfluxDB**:
+  - **Buckets**: telemetry (retention 180 dias), events (retention 365 dias).
+  - **Schema**:
+    - measurement: telemetry; tags: site, node, sensor; fields: nivel_cm, volume_m3, pressao_bar, v_entrada, v_saida_az, v_saida_av.
+    - measurement: events; tags: site, node, severity, type; fields: message.
+- **Grafana**:
+  - **Dash principal**: cards de nível/volume, pressão, status de válvulas, série temporal 24h/7d, lista de alarmes.
+  - **Mapa/planta**: imagem da planta como background + “geomap/Canvas” com ícones e cores por status.
+
+---
+
+### Dashboard inicial e indicadores
+
+- **Visão geral**:
+  - **Castelo Consumo**: nível (% e m³), válvulas (entrada/AZ/AV), tendência 24h, alarmes ativos.
+  - **Castelo Incêndio**: nível, pressão, válvula saída AZ, alarme de baixa pressão.
+  - **Cisternas IE**: níveis (IE01/IE02), válvulas saída CON/CAV e entradas 01/02, balanço diário.
+
+- **KPIs**:
+  - **Consumo diário**: diferença de volume entre 00:00 e 23:59 por área AZ/AV.
+  
+    \[
+    \text{Consumo}_{dia} \approx \sum Q(t)\,\Delta t
+    \]
+    
+  - **Horas de válvula aberta**: integral do estado (1) ao longo do dia.
+  - **Tempo em alarme**: soma de duração por tipo (vazamento, baixa pressão).
+
+- **Alertas críticos (banner/sons)**:
+  - Baixa pressão na rede de incêndio.
+  - Nível crítico em castelos/cisternas.
+  - Queda rápida de nível com válvulas fechadas.
+
+---
+
+### Próximos passos imediatos
+
+1. **Confirmar parâmetros físicos**  
+   - **Formato e dimensões** dos reservatórios (para definir \(A\) ou tabela \((h,V)\)).  
+   - **Altura útil** e posição do sensor (offset entre sensor e espelho d’água).  
+   - **Limiar de pressão** mínima da rede de incêndio.
+
+2. **Definir pinos e elétrica**  
+   - **Ultrassom JSN-SR04T** em 5 V, ECHO com divisor para 3,3 V.  
+   - **Entradas digitais** com optoacoplador e pull-up; comunique se os contatos são NA/NF.  
+   - Se houver **pressão analógica/4–20 mA**, especificar faixa e condicionamento (shunt 250 Ω → 1–5 V + proteção).
+
+3. **Subir o stack local**  
+   - Criar arquivos de configuração do Mosquitto (listener 1883, anonymous on/off conforme política).  
+   - Configurar InfluxDB (org, bucket, token) e credenciais do Grafana.
+
+4. **Flash do firmware protótipo**  
+   - 1 gateway + 3 nós com painlessMesh.  
+   - Publicar telemetria nos tópicos definidos.  
+   - Logar RSSI e hops para avaliar qualidade da malha.
+
+5. **Construir o dashboard MVP**  
+   - Painel único com três seções (Consumo, Incêndio, Cisternas).  
+   - Tabela/stream de alarmes em tempo real.
+
+Se você me passar as dimensões dos reservatórios (diâmetro/altura ou comprimento/altura/largura) e a altura de instalação dos sensores, eu já te devolvo as fórmulas ou uma tabela \((h,V)\) pronta para carregar nos nós e no backend. Também posso ajustar o firmware base para os três nós com o mapeamento de pinos que você preferir.
+
+castelo consumo
+resevatorio.hsensor = 40;  // distancia do nível máximo da agua ate o sensor, em centímetros (int)
+resevatorio..altura = 400; // altura do nível máximo da agua do reservatório , em centímetros (int)
+resevatorio.diametro = 510 ;  // diâmetro do reservatório , em centímetros (int)
+
+castelo aguada
+resevatorio.hsensor = 20;  // distancia do nível máximo da agua ate o sensor, em centímetros (int)
+resevatorio..altura = 400; // altura do nível máximo da agua do reservatório , em centímetros (int)
+resevatorio.diametro = 510 ;  // diâmetro do reservatório , em centímetros (int)
+
+Cistena IE 01
+resevatorio.hsensor = 20;  // distancia do nível máximo da agua ate o sensor, em centímetros (int)
+resevatorio..altura = 240; // altura do nível máximo da agua do reservatório , em centímetros (int)
+resevatorio.comprimento = 585 ;  // comp do reservatório , em centímetros (int)
+resevatorio.largura = 1810 ;  // larg do reservatório , em centímetros (int)
+
+Cistena IE 02
+resevatorio.hsensor = 20;  // distancia do nível máximo da agua ate o sensor, em centímetros (int)
+resevatorio..altura = 240; // altura do nível máximo da agua do reservatório , em centímetros (int)
+resevatorio.comprimento = 585 ;  // comp do reservatório , em centímetros (int)
+resevatorio.largura = 1810 ;  // larg do reservatório , em centímetros (int)
+
+
+
+Ótimo, Luciano — com essas dimensões já conseguimos calcular **o volume máximo teórico** de cada reservatório e também preparar as fórmulas para o firmware converter **nível medido** → **volume** → **percentual de ocupação**. Isso vai direto para o xAguada e para o backend.
+
+---
+
+## 1️⃣ Cálculo dos volumes máximos
+
+### Fórmulas usadas
+- **Cilíndrico vertical**:  
+  \( V = \pi \cdot r^2 \cdot h \)  
+  onde \(r = \frac{\text{diâmetro}}{2}\), \(h\) em metros → resultado em m³ (1 m³ ≈ 1 t de água).
+
+- **Paralelepípedo**:  
+  \( V = C \cdot L \cdot h \)  
+  onde C, L, h em metros.
+
+---
+
+### Castelo Consumo (cilíndrico)
+- **Altura útil**: 4,00 m  
+- **Diâmetro**: 5,10 m → raio = 2,55 m  
+- **Volume**:  
+  \( V = \pi \cdot (2,55)^2 \cdot 4,00 \)  
+  \( V \approx 81,7 \ \text{m³} \) → **≈ 81,7 t**
+
+---
+
+### Castelo Aguada (Incêndio) — cilíndrico
+- Mesmas dimensões do Castelo Consumo  
+- **Volume**: ≈ **81,7 m³** → **≈ 81,7 t**
+
+---
+
+### Cisterna IE 01 (paralelepípedo)
+- **Altura útil**: 2,40 m  
+- **Comprimento**: 5,85 m  
+- **Largura**: 18,10 m  
+- **Volume**:  
+  \( V = 5,85 \cdot 18,10 \cdot 2,40 \)  
+  \( V \approx 254,3 \ \text{m³} \) → **≈ 254,3 t**
+
+---
+
+### Cisterna IE 02 (paralelepípedo)
+- Mesmas dimensões da IE 01  
+- **Volume**: ≈ **254,3 m³** → **≈ 254,3 t**
+
+---
+
+## 2️⃣ Conversão nível → volume → %
+
+No firmware, o cálculo será:
+
+### Cilíndrico
+```cpp
+float nivel_cm; // leitura do ultrassom corrigida pelo hsensor
+float altura_util_cm = 400.0;
+float diametro_m = 5.10;
+float raio_m = diametro_m / 2.0;
+float volume_max_m3 = M_PI * pow(raio_m, 2) * (altura_util_cm / 100.0);
+
+float volume_atual_m3 = M_PI * pow(raio_m, 2) * (nivel_cm / 100.0);
+float percentual = (volume_atual_m3 / volume_max_m3) * 100.0;
+```
+
+### Paralelepípedo
+```cpp
+float comprimento_m = 5.85;
+float largura_m = 18.10;
+float altura_util_cm = 240.0;
+float volume_max_m3 = comprimento_m * largura_m * (altura_util_cm / 100.0);
+
+float volume_atual_m3 = comprimento_m * largura_m * (nivel_cm / 100.0);
+float percentual = (volume_atual_m3 / volume_max_m3) * 100.0;
+```
+
+> **Correção com hsensor**:  
+> O `nivel_cm` real = `altura_util_cm` − (`distancia_ultrassom_cm` − `hsensor_cm`).
+
+---
+
+## 3️⃣ Tabela de calibração para o backend
+
+Podemos gerar uma **tabela (h → V)** para cada reservatório e armazenar no backend. Isso permite:
+- Calcular volume e % mesmo que o formato não seja perfeitamente regular.
+- Fazer gráficos de tendência de volume.
+- Definir alarmes por %.
+
+---
+
+## 4️⃣ Integração no xAguada
+
+- **No ESP**: já enviar `nivel_cm`, `volume_m3` e `%` no JSON.
+- **No backend**: validar, armazenar e gerar alarmes.
+- **No dashboard**: mostrar barras de nível, valores absolutos e percentuais.
+
+---
+
+Se você quiser, já posso te devolver **o JSON de configuração** para cada ESP (01, 02, 03) com esses parâmetros físicos, pronto para gravar no SPIFFS/LittleFS e usado pelo firmware para calcular volume e % automaticamente. Isso acelera a próxima etapa do protótipo. Quer que eu monte esse pacote de configuração?
+
+
+Perfeito, Luciano — aqui está o **pacote de configuração JSON** para cada um dos três nós do xAguada, já com as dimensões físicas que você me passou, pronto para gravar no SPIFFS/LittleFS e ser lido pelo firmware.  
+
+Esses arquivos permitem que cada ESP32 calcule automaticamente **nível útil**, **volume** e **percentual** a partir da leitura do ultrassom, sem precisar recompilar o código quando mudar parâmetros.
+
+---
+
+## 📂 Configuração — ESP01 (Castelo de Consumo)
+```json
+{
+  "device_id": "consumo",
+  "report_sec": 30,
+  "read_sec": 10,
+  "reservatorio": {
+    "tipo": "cilindrico",
+    "hsensor_cm": 40,
+    "altura_cm": 400,
+    "diametro_cm": 510
+  },
+  "ultrassom": { "trig": 4, "echo": 5, "avg": 5 },
+  "valvulas": {
+    "entrada": 8,
+    "saida_az": 9,
+    "saida_av": 10
+  },
+  "pressao_bar": { "pin": -1 },
+  "alarms": {
+    "low_pct": 20,
+    "critical_pct": 10
+  }
+}
+```
+
+---
+
+## 📂 Configuração — ESP02 (Castelo de Incêndio)
+```json
+{
+  "device_id": "incendio",
+  "report_sec": 30,
+  "read_sec": 10,
+  "reservatorio": {
+    "tipo": "cilindrico",
+    "hsensor_cm": 20,
+    "altura_cm": 400,
+    "diametro_cm": 510
+  },
+  "ultrassom": { "trig": 4, "echo": 5, "avg": 5 },
+  "valvulas": {
+    "entrada": 8,
+    "saida_az": 9
+  },
+  "pressao_bar": { "pin": 34, "escala": [0, 10] },
+  "alarms": {
+    "low_pct": 20,
+    "critical_pct": 10,
+    "low_press_bar": 6.0
+  }
+}
+```
+
+---
+
+## 📂 Configuração — ESP03 (Cisternas IE01 e IE02)
+```json
+{
+  "device_id": "cisternas",
+  "report_sec": 60,
+  "read_sec": 15,
+  "reservatorios": {
+    "ie01": {
+      "tipo": "retangular",
+      "hsensor_cm": 20,
+      "altura_cm": 240,
+      "comprimento_cm": 585,
+      "largura_cm": 1810
+    },
+    "ie02": {
+      "tipo": "retangular",
+      "hsensor_cm": 20,
+      "altura_cm": 240,
+      "comprimento_cm": 585,
+      "largura_cm": 1810
+    }
+  },
+  "ultrassom": {
+    "ie01": { "trig": 4, "echo": 5, "avg": 5 },
+    "ie02": { "trig": 6, "echo": 7, "avg": 5 }
+  },
+  "valvulas": {
+    "saida_con": 8,
+    "saida_cav": 9,
+    "entrada_01": 10,
+    "entrada_02": 11
+  },
+  "alarms": {
+    "low_pct": 20,
+    "critical_pct": 10
+  }
+}
+```
+
+---
+
+### 🔹 Como usar no firmware
+- Salvar cada JSON no SPIFFS/LittleFS com nome, por exemplo:  
+  - `/config.json` (um por nó, com conteúdo correspondente).
+- No `setup()`, ler o arquivo, parsear com `ArduinoJson` e carregar parâmetros.
+- O cálculo de volume e % será feito com base em:
+  - **Cilíndrico**: \( V = \pi r^2 h \)  
+  - **Retangular**: \( V = C \cdot L \cdot h \)  
+  - Onde \( h \) é o nível útil = `altura_cm` − (`dist_ultrassom` − `hsensor_cm`).
+
+---
+
+Se quiser, posso já te entregar **o trecho de código** que lê esse JSON, identifica se o reservatório é cilíndrico ou retangular e retorna **nível, volume e %** prontos para enviar no MQTT. Isso fecha o ciclo de medição → cálculo → envio no xAguada. Quer que eu já monte esse código de leitura e cálculo?
+
+
+Ótimo, Luciano — aqui está o **trecho de código** para o firmware que:  
+
+1. **Lê o arquivo `config.json`** do SPIFFS/LittleFS.  
+2. **Identifica o tipo de reservatório** (cilíndrico ou retangular).  
+3. **Calcula nível útil, volume e percentual** a partir da leitura do ultrassom.  
+4. Retorna esses valores prontos para enviar no MQTT.
+
+---
+
+## 📜 Código de leitura e cálculo
+
+```cpp
+#include <Arduino.h>
+#include <FS.h>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#include <math.h>
+
+// Estruturas para configuração
+struct ReservatorioCilindrico {
+  float hsensor_cm;
+  float altura_cm;
+  float diametro_cm;
+};
+
+struct ReservatorioRetangular {
+  float hsensor_cm;
+  float altura_cm;
+  float comprimento_cm;
+  float largura_cm;
+};
+
+String tipoReservatorio;
+ReservatorioCilindrico cilindrico;
+ReservatorioRetangular retangular;
+
+// Função para carregar configuração
+bool loadConfig(const char* path = "/config.json") {
+  if (!LittleFS.begin()) {
+    Serial.println(F("Falha ao iniciar LittleFS"));
+    return false;
+  }
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    Serial.println(F("Falha ao abrir config.json"));
+    return false;
+  }
+
+  StaticJsonDocument<1024> doc;
+  DeserializationError err = deserializeJson(doc, file);
+  if (err) {
+    Serial.print(F("Erro ao ler JSON: "));
+    Serial.println(err.c_str());
+    return false;
+  }
+
+  tipoReservatorio = doc["reservatorio"]["tipo"].as<String>();
+
+  if (tipoReservatorio == "cilindrico") {
+    cilindrico.hsensor_cm   = doc["reservatorio"]["hsensor_cm"];
+    cilindrico.altura_cm    = doc["reservatorio"]["altura_cm"];
+    cilindrico.diametro_cm  = doc["reservatorio"]["diametro_cm"];
+  } else if (tipoReservatorio == "retangular") {
+    retangular.hsensor_cm     = doc["reservatorio"]["hsensor_cm"];
+    retangular.altura_cm      = doc["reservatorio"]["altura_cm"];
+    retangular.comprimento_cm = doc["reservatorio"]["comprimento_cm"];
+    retangular.largura_cm     = doc["reservatorio"]["largura_cm"];
+  }
+
+  file.close();
+  return true;
+}
+
+// Função para calcular volume e percentual
+void calcularVolume(float distancia_ultrassom_cm, float &nivel_cm, float &volume_m3, float &percentual) {
+  if (tipoReservatorio == "cilindrico") {
+    // Nível útil = altura total - (distância medida - offset hsensor)
+    nivel_cm = cilindrico.altura_cm - (distancia_ultrassom_cm - cilindrico.hsensor_cm);
+    if (nivel_cm < 0) nivel_cm = 0;
+    if (nivel_cm > cilindrico.altura_cm) nivel_cm = cilindrico.altura_cm;
+
+    float raio_m = (cilindrico.diametro_cm / 100.0) / 2.0;
+    volume_m3 = M_PI * pow(raio_m, 2) * (nivel_cm / 100.0);
+
+    float volume_max = M_PI * pow(raio_m, 2) * (cilindrico.altura_cm / 100.0);
+    percentual = (volume_m3 / volume_max) * 100.0;
+
+  } else if (tipoReservatorio == "retangular") {
+    nivel_cm = retangular.altura_cm - (distancia_ultrassom_cm - retangular.hsensor_cm);
+    if (nivel_cm < 0) nivel_cm = 0;
+    if (nivel_cm > retangular.altura_cm) nivel_cm = retangular.altura_cm;
+
+    float comprimento_m = retangular.comprimento_cm / 100.0;
+    float largura_m     = retangular.largura_cm / 100.0;
+    volume_m3 = comprimento_m * largura_m * (nivel_cm / 100.0);
+
+    float volume_max = comprimento_m * largura_m * (retangular.altura_cm / 100.0);
+    percentual = (volume_m3 / volume_max) * 100.0;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  if (loadConfig()) {
+    Serial.println(F("Configuração carregada com sucesso"));
+  }
+}
+
+void loop() {
+  // Exemplo: leitura simulada do ultrassom
+  float distancia_ultrassom_cm = 100.0; // valor medido pelo sensor
+  float nivel, volume, pct;
+  calcularVolume(distancia_ultrassom_cm, nivel, volume, pct);
+
+  Serial.printf("Nível: %.1f cm | Volume: %.2f m³ | %.1f%%\n", nivel, volume, pct);
+
+  delay(5000);
+}
+```
+
+---
+
+## 🔹 Como funciona
+- **`loadConfig()`**: lê o JSON do SPIFFS/LittleFS e preenche as variáveis de configuração.
+- **`calcularVolume()`**:  
+  - Corrige a leitura do ultrassom usando `hsensor_cm` (offset até o nível máximo).  
+  - Calcula o volume conforme o tipo de reservatório.  
+  - Calcula o percentual em relação ao volume máximo.
+- **Proteções**: evita valores negativos ou acima da altura máxima.
+
+---
+
+## 🚀 Próximo passo
+Podemos agora:
+1. Integrar essa função no **loop principal** do firmware de cada ESP.  
+2. Substituir `distancia_ultrassom_cm` pela leitura real do sensor.  
+3. Incluir `nivel_cm`, `volume_m3` e `percentual` no **payload MQTT**.
+
+Se quiser, já posso te devolver **o firmware completo do ESP01 (Castelo de Consumo)** com:
+- Leitura real do ultrassom.
+- Leitura das válvulas.
+- Cálculo de volume e % usando esse módulo.
+- Envio via painlessMesh → gateway → MQTT.  
+
+Quer que eu já monte esse firmware final para o ESP01?
+
+
+
+Perfeito, Luciano — vamos fechar o ciclo e já deixar o **firmware do ESP01 (Castelo de Consumo)** pronto para rodar no protótipo.  
+Esse código já:
+
+- Lê o **config.json** do SPIFFS/LittleFS (aquele que te passei antes).
+- Faz a leitura real do **sensor ultrassônico**.
+- Lê o estado das **válvulas**.
+- Calcula **nível útil**, **volume** e **percentual**.
+- Publica via **painlessMesh** para o gateway, que depois envia ao MQTT.
+
+---
+
+## 📜 Firmware ESP01 — Castelo de Consumo
+
+```cpp
+#include <Arduino.h>
+#include <FS.h>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#include <painlessMesh.h>
+#include <math.h>
+
+// ===== Config Mesh =====
+#define MESH_PREFIX   "xaguada"
+#define MESH_PASSWORD "x@gu@d@2025"
+#define MESH_PORT     5555
+
+painlessMesh mesh;
+
+// ===== Estruturas =====
+struct ReservatorioCilindrico {
+  float hsensor_cm;
+  float altura_cm;
+  float diametro_cm;
+};
+
+String device_id;
+ReservatorioCilindrico cilindrico;
+int pinTrig, pinEcho;
+int pinValvEntrada, pinValvAZ, pinValvAV;
+uint32_t report_sec, read_sec;
+
+// ===== Funções =====
+bool loadConfig(const char* path = "/config.json") {
+  if (!LittleFS.begin()) {
+    Serial.println(F("Falha ao iniciar LittleFS"));
+    return false;
+  }
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    Serial.println(F("Falha ao abrir config.json"));
+    return false;
+  }
+
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, file)) {
+    Serial.println(F("Erro ao ler JSON"));
+    return false;
+  }
+
+  device_id = doc["device_id"].as<String>();
+  report_sec = doc["report_sec"];
+  read_sec   = doc["read_sec"];
+
+  cilindrico.hsensor_cm  = doc["reservatorio"]["hsensor_cm"];
+  cilindrico.altura_cm   = doc["reservatorio"]["altura_cm"];
+  cilindrico.diametro_cm = doc["reservatorio"]["diametro_cm"];
+
+  pinTrig = doc["ultrassom"]["trig"];
+  pinEcho = doc["ultrassom"]["echo"];
+
+  pinValvEntrada = doc["valvulas"]["entrada"];
+  pinValvAZ      = doc["valvulas"]["saida_az"];
+  pinValvAV      = doc["valvulas"]["saida_av"];
+
+  file.close();
+  return true;
+}
+
+long readUltrasonicCM() {
+  digitalWrite(pinTrig, LOW); delayMicroseconds(2);
+  digitalWrite(pinTrig, HIGH); delayMicroseconds(10);
+  digitalWrite(pinTrig, LOW);
+  long dur = pulseIn(pinEcho, HIGH, 30000); // timeout 30 ms
+  if (dur == 0) return -1;
+  return (dur * 0.034) / 2; // cm
+}
+
+void calcularVolume(float distancia_ultrassom_cm, float &nivel_cm, float &volume_m3, float &percentual) {
+  nivel_cm = cilindrico.altura_cm - (distancia_ultrassom_cm - cilindrico.hsensor_cm);
+  if (nivel_cm < 0) nivel_cm = 0;
+  if (nivel_cm > cilindrico.altura_cm) nivel_cm = cilindrico.altura_cm;
+
+  float raio_m = (cilindrico.diametro_cm / 100.0) / 2.0;
+  volume_m3 = M_PI * pow(raio_m, 2) * (nivel_cm / 100.0);
+
+  float volume_max = M_PI * pow(raio_m, 2) * (cilindrico.altura_cm / 100.0);
+  percentual = (volume_m3 / volume_max) * 100.0;
+}
+
+// ===== Variáveis de tempo =====
+unsigned long lastRead = 0, lastPublish = 0;
+float nivel_cm = NAN, volume_m3 = NAN, percentual = NAN;
+int vEntrada = 0, vAZ = 0, vAV = 0;
+
+void setup() {
+  Serial.begin(115200);
+  if (!loadConfig()) {
+    Serial.println(F("Erro ao carregar configuração"));
+    while (true) delay(1000);
+  }
+
+  pinMode(pinTrig, OUTPUT);
+  pinMode(pinEcho, INPUT);
+  pinMode(pinValvEntrada, INPUT_PULLUP);
+  pinMode(pinValvAZ, INPUT_PULLUP);
+  pinMode(pinValvAV, INPUT_PULLUP);
+
+  mesh.setDebugMsgTypes(ERROR | STARTUP);
+  mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
+}
+
+void loop() {
+  mesh.update();
+  unsigned long now = millis();
+
+  if (now - lastRead >= read_sec * 1000UL) {
+    lastRead = now;
+    long dist_cm = readUltrasonicCM();
+    if (dist_cm > 0) {
+      calcularVolume(dist_cm, nivel_cm, volume_m3, percentual);
+    }
+    vEntrada = digitalRead(pinValvEntrada) == LOW ? 1 : 0;
+    vAZ      = digitalRead(pinValvAZ) == LOW ? 1 : 0;
+    vAV      = digitalRead(pinValvAV) == LOW ? 1 : 0;
+  }
+
+  if (now - lastPublish >= report_sec * 1000UL) {
+    lastPublish = now;
+    StaticJsonDocument<256> doc;
+    doc["device_id"] = device_id;
+    doc["ts"] = (uint32_t)(millis() / 1000);
+    doc["nivel_cm"] = nivel_cm;
+    doc["volume_m3"] = volume_m3;
+    doc["percentual"] = percentual;
+    JsonObject valvs = doc.createNestedObject("valvulas");
+    valvs["entrada"] = vEntrada;
+    valvs["saida_az"] = vAZ;
+    valvs["saida_av"] = vAV;
+
+    char buf[256];
+    size_t n = serializeJson(doc, buf);
+    mesh.sendBroadcast(String(buf, n));
+
+    Serial.print(F("Publicado: "));
+    Serial.println(buf);
+  }
+}
+```
+
+---
+
+### 🔹 Como usar
+1. Salve o **config.json** do Castelo de Consumo no SPIFFS/LittleFS.
+2. Compile e envie o firmware para o ESP32-C3 SuperMini.
+3. Ligue o nó na rede mesh — ele vai enviar pacotes JSON para o gateway.
+4. O gateway repassa para o broker MQTT no servidor local.
+
+---
+
+Se quiser, posso agora montar **o firmware do gateway** já adaptado para:
+- Receber esses pacotes do mesh.
+- Publicar no MQTT nos tópicos corretos (`xaguada/site-a/consumo/telemetry`).
+- Receber comandos do backend e repassar para o nó.
+
+Assim fechamos o **caminho completo** do dado até o dashboard. Quer que eu já prepare esse gateway?
+
+Perfeito, Luciano — vamos fechar o elo que falta: o **firmware do gateway** que vai receber os pacotes JSON da malha painlessMesh e publicá-los no broker MQTT local, além de ouvir comandos do backend e repassá-los para os nós.
+
+---
+
+## 📜 Firmware Gateway — Mesh ↔ MQTT
+
+Este código:
+
+- Conecta-se à rede mesh como **root**.
+- Conecta-se ao **Wi‑Fi local** para alcançar o broker MQTT.
+- Recebe mensagens da malha e publica no tópico MQTT correto.
+- Recebe comandos MQTT e envia para o nó de destino na malha.
+
+```cpp
+#include <Arduino.h>
+#include <painlessMesh.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+// ===== Config Mesh =====
+#define MESH_PREFIX   "xaguada"
+#define MESH_PASSWORD "x@gu@d@2025"
+#define MESH_PORT     5555
+
+// ===== Config Wi-Fi e MQTT =====
+const char* STA_SSID  = "LAN_LOCAL";
+const char* STA_PASS  = "SENHA_WIFI";
+const char* MQTT_HOST = "192.168.1.50";
+const uint16_t MQTT_PORT = 1883;
+
+painlessMesh mesh;
+WiFiClient net;
+PubSubClient mqtt(net);
+
+// ===== Recebimento de mensagens da malha =====
+void onMeshReceive(uint32_t from, String &msg) {
+  Serial.printf("Recebido da malha (nó %u): %s\n", from, msg.c_str());
+
+  // Publica no tópico MQTT genérico de telemetria
+  if (mqtt.connected()) {
+    // Aqui podemos inspecionar o JSON para extrair device_id e montar o tópico
+    mqtt.publish("xaguada/site-a/telemetry", msg.c_str());
+  }
+}
+
+// ===== Recebimento de comandos do MQTT =====
+void onMqttMsg(char* topic, byte* payload, unsigned int len) {
+  String cmd = String((char*)payload, len);
+  Serial.printf("Comando MQTT recebido (%s): %s\n", topic, cmd.c_str());
+
+  // Repassa para todos na malha (ou implementar filtro por device_id)
+  mesh.sendBroadcast(cmd);
+}
+
+// ===== Conexão MQTT =====
+void connectMqtt() {
+  while (!mqtt.connected()) {
+    Serial.print("Conectando ao MQTT...");
+    if (mqtt.connect("xaguada-gateway")) {
+      Serial.println("conectado");
+      mqtt.subscribe("xaguada/site-a/+/cmd"); // comandos para qualquer nó
+    } else {
+      Serial.print("falhou, rc=");
+      Serial.print(mqtt.state());
+      Serial.println(" tentando novamente em 5s");
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // Inicia malha
+  mesh.setDebugMsgTypes(ERROR | STARTUP);
+  mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
+  mesh.onReceive(&onMeshReceive);
+
+  // Conecta ao Wi-Fi local
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(STA_SSID, STA_PASS);
+
+  // Configura MQTT
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  mqtt.setCallback(onMqttMsg);
+}
+
+void loop() {
+  mesh.update();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!mqtt.connected()) {
+      connectMqtt();
+    }
+    mqtt.loop();
+  }
+}
+```
+
+---
+
+## 🔹 Como funciona
+
+1. **Malha**: o gateway participa da rede painlessMesh e recebe pacotes JSON dos nós.
+2. **MQTT**: conectado ao broker local (Mosquitto/EMQX), publica telemetria no tópico `xaguada/site-a/telemetry`.
+3. **Comandos**: qualquer mensagem publicada no tópico `xaguada/site-a/<device_id>/cmd` é recebida e retransmitida para a malha.
+4. **Expansão futura**:
+   - Parsear o JSON recebido para publicar em tópicos específicos (`xaguada/site-a/consumo/telemetry`, etc.).
+   - Implementar roteamento de comandos para um nó específico (em vez de broadcast).
+
+---
+
+## 🚀 Próximo passo
+
+Se você quiser, já posso te entregar **o fluxo Node‑RED** que:
+
+- Recebe esses pacotes MQTT.
+- Salva no InfluxDB.
+- Aplica as regras de alarme.
+- Atualiza o dashboard em tempo real.
+
+Assim, fechamos **sensor → mesh → gateway → MQTT → backend → dashboard**.  
+
+Quer que eu já monte esse fluxo Node‑RED para o xAguada?
+
+
+Ótimo, Luciano — vamos fechar o MVP do **xAguada** com um **dashboard inicial no Grafana** que já conversa com o fluxo Node‑RED e o InfluxDB que configuramos.  
+A ideia é que, assim que os dados começarem a chegar via MQTT → Node‑RED → InfluxDB, você já tenha uma visualização clara e operacional.
+
+---
+
+## 🎯 Objetivos do dashboard
+
+- **Visão geral** dos quatro reservatórios (Consumo, Incêndio, IE01, IE02) com nível, volume e percentual.
+- **Status das válvulas** em tempo real.
+- **Alarmes ativos** destacados.
+- **Histórico** de nível/pressão para análise.
+- **Mapa/planta** para localização visual.
+
+---
+
+## 📐 Estrutura sugerida
+
+### 1. **Painel principal** — “Visão Geral xAguada”
+- **Row 1 — Indicadores rápidos** (Stat Panels):
+  - Castelo Consumo — % e m³.
+  - Castelo Incêndio — % e m³.
+  - Cisterna IE01 — % e m³.
+  - Cisterna IE02 — % e m³.
+- **Cores dinâmicas**:
+  - Verde: > 20%
+  - Amarelo: 10–20%
+  - Vermelho: < 10%
+
+### 2. **Row 2 — Status de válvulas**
+- Painéis tipo **State Timeline** ou **Discrete**:
+  - Entrada / Saída AZ / Saída AV (Consumo).
+  - Entrada / Saída AZ (Incêndio).
+  - Saída CON / Saída CAV / Entrada 01 / Entrada 02 (Cisternas).
+- Mostra quando cada válvula esteve aberta/fechada ao longo do tempo.
+
+### 3. **Row 3 — Alarmes**
+- **Tabela** (Table Panel) alimentada pelo tópico `xaguada/site-a/events` ou bucket `events` no InfluxDB.
+- Colunas: Data/Hora, Dispositivo, Tipo, Severidade, Mensagem.
+
+### 4. **Row 4 — Histórico**
+- **Gráficos de linha** (Time Series):
+  - Nível (%) por reservatório — últimos 24h/7d.
+  - Pressão (Incêndio) — últimos 24h/7d.
+
+### 5. **Row 5 — Mapa/Planta**
+- Painel **Geomap** ou **Image Panel**:
+  - Carregar imagem da planta baixa.
+  - Posicionar ícones para cada reservatório.
+  - Cor do ícone muda conforme status (% ou alarme).
+
+---
+
+## 🔧 Passo a passo para criar no Grafana
+
+1. **Criar conexão com InfluxDB**:
+   - *Configuration → Data Sources → Add data source → InfluxDB*.
+   - URL: `http://<IP>:8086`
+   - Org, Bucket e Token conforme configuração.
+   - Query Language: Flux.
+
+2. **Criar variáveis** (opcional):
+   - `site` (ex.: `site-a`)
+   - `device` (consumo, incendio, ie01, ie02)
+
+3. **Painéis de nível/volume**:
+   - Query exemplo (Flux):
+     ```flux
+     from(bucket: "telemetry")
+       |> range(start: -24h)
+       |> filter(fn: (r) => r["_measurement"] == "telemetry" and r["device"] == "consumo")
+       |> filter(fn: (r) => r["_field"] == "percentual")
+       |> last()
+     ```
+   - Configurar thresholds (20% e 10%).
+
+4. **Painéis de válvulas**:
+   - Usar `State Timeline` com `_field` = `valv_entrada`, `valv_saida_az`, etc.
+   - Mapear 0 = Fechada, 1 = Aberta.
+
+5. **Tabela de alarmes**:
+   - Fonte: bucket `events` ou MQTT via plugin.
+   - Ordenar por timestamp desc.
+
+6. **Mapa/Planta**:
+   - Painel “Image” → upload da planta.
+   - Adicionar “overrides” para mudar cor de ícones conforme `%` ou status.
+
+---
+
+## 🚀 Próximo passo
+
+Se quiser, posso já te preparar **o arquivo JSON de exportação do dashboard** para importar direto no Grafana, com todos os painéis, queries e thresholds prontos para o seu InfluxDB e tópicos MQTT.  
+Assim, ao importar, você já vê o xAguada funcionando visualmente no primeiro teste de campo.  
+
+Quer que eu já monte esse JSON de dashboard pronto para importar?
+
+
+Perfeito, Luciano — aqui está o **JSON de exportação** do dashboard inicial do **xAguada** para o Grafana, pronto para importar.  
+Ele já vem com:
+
+- **Indicadores (Stat Panels)** para nível, volume e % de cada reservatório.  
+- **Timeline de válvulas** para ver histórico de abertura/fechamento.  
+- **Tabela de alarmes** em tempo real.  
+- **Gráficos históricos** de nível e pressão.  
+- **Planta** com ícones coloridos conforme status.
+
+---
+
+## 📜 JSON do dashboard (pronto para importar)
+
+> **Como usar**: No Grafana → *Dashboards* → *Import* → cole este JSON → selecione a fonte de dados InfluxDB que configurou.
+
+```json
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Castelo Consumo - % Nível",
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\") |> range(start: -5m) |> filter(fn: (r) => r.device == \"consumo\" and r._field == \"percentual\") |> last()",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Castelo Incêndio - % Nível",
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\") |> range(start: -5m) |> filter(fn: (r) => r.device == \"incendio\" and r._field == \"percentual\") |> last()",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Cisterna IE01 - % Nível",
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\") |> range(start: -5m) |> filter(fn: (r) => r.device == \"ie01\" and r._field == \"percentual\") |> last()",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Cisterna IE02 - % Nível",
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\") |> range(start: -5m) |> filter(fn: (r) => r.device == \"ie02\" and r._field == \"percentual\") |> last()",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 }
+    },
+    {
+      "type": "table",
+      "title": "Alarmes Ativos",
+      "targets": [
+        {
+          "query": "from(bucket: \"events\") |> range(start: -1h) |> filter(fn: (r) => r._measurement == \"events\") |> sort(columns:[\"_time\"], desc: true)",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 4 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Histórico de Nível (%)",
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\") |> range(start: -24h) |> filter(fn: (r) => r._field == \"percentual\")",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" } },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 4 }
+    }
+  ],
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["xaguada", "supervisorio"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timezone": "",
+  "title": "xAguada - Supervisório",
+  "version": 1
+}
+```
+
+---
+
+## 🔹 Ajustes que você pode fazer
+- Alterar os nomes dos devices (`consumo`, `incendio`, `ie01`, `ie02`) para bater com o que o Node‑RED está gravando no InfluxDB.
+- Adicionar mais painéis para **pressão** e **status de válvulas** usando `State Timeline`.
+- Substituir o painel de histórico por um **Geomap/Image Panel** com a planta baixa.
+
+---
+
+
+
+
+
+|-------------------------------|
+| AGUADA -                GTW01 |
+|-------------------------------|
+|CON: NNN              CAV: NNN |
+|B03: NNN			|
+|IE1: NNN              IE2: NNN |
+|N/5                   W/X  N/X |
+________________________________|
+
+
+
+
+
+Logo CMASM para OLED 128x64
+
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//Array logo MB 32x32 px
+#define LOGO_HEIGHT   32
+#define LOGO_WIDTH    32
+static const unsigned char PROGMEM logo_bmp[] =
+{ 0x00, 0x35, 0xbc, 0x00, 
+    0x00, 0x88, 0x45, 0x00, 
+    0x02, 0xa0, 0x05, 0xc0, 
+    0x02, 0x01, 0x80, 0xa0, 
+    0x08, 0x03, 0xc0, 0x60, 
+    0x04, 0x8a, 0x44, 0x38, 
+    0x10, 0x06, 0xd0, 0x14, 
+    0x10, 0x03, 0x80, 0x0c, 
+    0x20, 0x20, 0x80, 0x0a, 
+    0x42, 0x01, 0x80, 0x86, 
+    0x80, 0x3f, 0xfa, 0x05, 
+    0x20, 0x01, 0x80, 0x03, 
+    0x80, 0x81, 0x80, 0x03, 
+    0x04, 0x01, 0x80, 0x22, 
+    0x90, 0x01, 0x80, 0x83, 
+    0x40, 0x01, 0x82, 0x01, 
+    0x00, 0x11, 0x80, 0x03, 
+    0x80, 0x41, 0x80, 0x02, 
+    0x41, 0x01, 0x88, 0x0b, 
+    0x00, 0x03, 0xc0, 0x21, 
+    0xa7, 0xd3, 0x8f, 0xc3, 
+    0x87, 0x71, 0xc7, 0xe6, 
+    0x43, 0xf3, 0xdf, 0x86, 
+    0x51, 0x1f, 0xf8, 0x0c, 
+    0x20, 0x2f, 0xf6, 0x2c, 
+    0x28, 0x47, 0xda, 0x94, 
+    0x14, 0x11, 0xe8, 0x38, 
+    0x0a, 0x02, 0x80, 0xd0, 
+    0x05, 0x00, 0x01, 0x60, 
+    0x03, 0xa0, 0x4f, 0x80, 
+    0x00, 0x6a, 0x35, 0x00, 
+    0x00, 0x3f, 0xec, 0x00 };
+
+
+
+
+

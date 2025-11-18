@@ -44,3 +44,7 @@ backups/
 tmp/
 temp/
 *.tmp
+
+# Arquivo auxiliar de desenvolvimento (ignorado no git)
+___arquivo___/
+

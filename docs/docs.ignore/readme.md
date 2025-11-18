@@ -1,0 +1,1 @@
+nao considerar essa pasta no projeto. sao referencias nao confiaveis, para extracao/copia de trechos de codigo/ definicoes.

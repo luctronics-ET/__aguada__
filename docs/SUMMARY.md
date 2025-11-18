@@ -72,11 +72,12 @@ Guia completo de instalação:
 **Diretório:** `/config/`
 
 #### 4.1 reservoirs.json
-Dimensões e parâmetros dos 4 reservatórios:
-- Castelo de Consumo (CON) - 81.7 m³ cilíndrico
-- Castelo de Incêndio (CAV) - 81.7 m³ cilíndrico (nível crítico: 70%)
-- Cisterna IE01 - 254 m³ retangular
-- Cisterna IE02 - 254 m³ retangular
+Dimensões e parâmetros dos 5 reservatórios:
+- RCON - Castelo de Consumo - 81.7 m³ cilíndrico - hsensor 40cm
+- RCAV - Castelo de Incêndio - 81.7 m³ cilíndrico - hsensor 20cm (nível crítico: 70%)
+- RB03 - Reservatório Casa Bombas - 80 m³ cilíndrico - Casa de Bombas N03
+- IE01 - Cisterna IE 01 - 254 m³ retangular - hsensor 20cm
+- IE02 - Cisterna IE 02 - 254 m³ retangular - hsensor 20cm (mesmo ESP que IE01)
 
 Inclui:
 - Dimensões físicas
@@ -105,11 +106,13 @@ Modelo de rede hidráulica:
 
 #### 4.4 sensors.json
 Mapeamento e calibração de sensores:
-- 4 sensores ultrassônicos AJ-SR04M
-- Mapeamento MAC → node → sensor
-- Parâmetros de calibração
-- Procedimento de calibração padrão
-- Status e localização
+- 5 sensores ultrassônicos AJ-SR04M
+- 4 nodes ESP32-C3 SuperMini (1 deles com 2 sensores)
+- Mapeamento MAC → sensor_type → reservatório (feito no backend)
+- Tipos: TYPE_SINGLE_ULTRA (3x) e TYPE_DUAL_ULTRA (1x)
+- Parâmetros de calibração por sensor
+- Procedimento de calibração padrão trimestral
+- Status, localização e GPIO mapping
 
 ---
 

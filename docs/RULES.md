@@ -3,12 +3,14 @@
 ## 1. Visão Geral do Sistema
 
 AGUADA é um sistema supervisório IoT para monitoramento e gestão de redes hídricas, composto por:
-- **6 reservatórios** monitorados
-- **5-10 bombas** de recalque
-- **~20 válvulas** de controle
+- **5 reservatórios** monitorados (RCON, RCAV, RB03, IE01, IE02)
+- **Casa de Bombas N03** com reservatório intermediário
+- **2 bombas de recalque** (B03E elétrica, B03D diesel)
+- **Válvulas de controle** (entrada, saída, manobra)
 - **Sensores ultrassônicos** AJ-SR04M para medição de nível
-- **Nodes ESP32-C3** para telemetria
-- **Gateway MQTT** para comunicação
+- **Nodes ESP32-C3 SuperMini** para telemetria
+- **Comunicação ESP-NOW** sensor → gateway (até 250m)
+- **Gateway ESP32-C3** converte ESP-NOW → MQTT
 - **Backend PostgreSQL/TimescaleDB** para persistência
 - **Dashboard Grafana/Web** para visualização
 
@@ -18,31 +20,55 @@ AGUADA é um sistema supervisório IoT para monitoramento e gestão de redes hí
 
 ### 2.1 Reservatórios Principais
 
-#### Castelo de Consumo (CON)
-- Capacidade: 80 m³
-- Altura útil: 400 cm
-- Diâmetro: 510 cm
-- Sensor offset: 40 cm
+#### RCON - Castelo de Consumo (CON)
+- **ID**: RCON
+- **Capacidade**: 80 m³ (81.7 m³ calculado)
+- **Altura útil**: 400 cm
+- **Diâmetro**: 510 cm
+- **Sensor offset**: 40 cm (hsensor)
+- **Tipo**: Cilíndrico vertical
 - **Variação diária significativa** (foco principal de monitoramento)
-- Válvulas: entrada (IE), saída AZ (Área Azul), saída AV (Área Vermelha)
+- **Válvulas**: entrada (IE), saída AZ (Área Azul), saída AV (Área Vermelha)
+- **Node**: ESP32-C3 single sensor
+- **Local**: Cobertura Bloco A
 
-#### Castelo de Incêndio (CAV)
-- Capacidade: 80 m³
-- Altura útil: 400 cm
-- Diâmetro: 510 cm
-- Sensor offset: 20 cm
+#### RCAV - Castelo de Incêndio (CAV)
+- **ID**: RCAV
+- **Capacidade**: 80 m³ (81.7 m³ calculado)
+- **Altura útil**: 400 cm
+- **Diâmetro**: 510 cm
+- **Sensor offset**: 20 cm (hsensor)
+- **Tipo**: Cilíndrico vertical
 - **Nível mínimo crítico: 70%**
-- Rede independente com tomadas em Y
-- Uso esporádico, esvaziamento rápido em eventos
+- **Rede independente** com tomadas em Y
+- **Uso esporádico**, esvaziamento rápido em eventos
+- **Node**: ESP32-C3 single sensor
+- **Local**: Cobertura Bloco B
 
-#### Cisternas IE01 e IE02
-- Capacidade: 254 m³ cada
-- Altura útil: 240 cm
-- Comprimento: 585 cm
-- Largura: 1810 cm
-- Sensor offset: 20 cm
-- Formato retangular
-- Válvulas: saída CON, saída CAV, entrada 01, entrada 02
+#### RB03 - Reservatório Casa de Bombas N03
+- **ID**: RB03
+- **Capacidade**: 80 m³
+- **Tipo**: Cilíndrico vertical (confirmar dimensões)
+- **Local**: CB03 - Casa de Bombas N03
+- **Função**: Armazenamento intermediário para recalque
+- **Bombas associadas**:
+  - **B03E**: Bomba elétrica de recalque
+  - **B03D**: Bomba diesel (backup/emergência)
+- **Válvulas**: entrada IE, saída CON, saída CAV, válvulas de manobra
+- **Node**: ESP32-C3 single sensor
+- **Abastece**: RCON (consumo) ou RCAV (incêndio)
+
+#### IE01 e IE02 - Cisternas
+- **ID**: IE01, IE02
+- **Capacidade**: 254 m³ cada (254.124 m³ calculado)
+- **Altura útil**: 240 cm
+- **Comprimento**: 585 cm
+- **Largura**: 1810 cm
+- **Sensor offset**: 20 cm (hsensor)
+- **Tipo**: Retangular (paralelepípedo)
+- **Válvulas**: saída CON, saída CAV, entrada IF
+- **Node**: 1 único ESP32-C3 com 2 sensores ultrassônicos
+- **Local**: Subsolo
 
 ---
 
@@ -95,27 +121,97 @@ Cada elemento tem coordenadas para visualização em:
 
 ## 4. Telemetria e Compressão de Dados
 
-### 4.1 Estrutura Padronizada
+### 4.1 Estrutura Padronizada (JSON via ESP-NOW)
 
-```cpp
-struct Telemetry {
-    String mac;           // MAC do node
-    uint32_t ts;          // Unix timestamp
-    String data_label;    // ex: "ultra1_cm", "valve_in"
-    float data_value;     // valor medido
-    float battery;        // tensão bateria (mV)
-    int rssi;             // força sinal WiFi
+**Payload Simplificado - Envio Individual por Variável:**
+
+```json
+{
+  "mac": "dc:06:75:67:6a:cc",
+  "type": "nivel_cm",
+  "value": 24480,
+  "battery": 5000,
+  "uptime": 3600,
+  "rssi": -50
 }
 ```
 
+**Regras de Transmissão:**
+- Cada variável é enviada **individualmente** quando muda
+- `value` sempre como **inteiro** (ex: 244.8cm → 24480, multiplicado por 100)
+- `datetime` é adicionado pelo **servidor** ao receber
+- `battery` em mV (fonte DC 5V → 5000mV)
+- `uptime` em segundos desde boot
+- `rssi` em dBm (força do sinal ESP-NOW)
+
+**Tipos de Dados Enviados:**
+
+| type | value | unit | quando enviar |
+|------|-------|------|---------------|
+| `distance_cm` | int (cm*100) | cm | variação > ±2cm |
+| `sound_in` | 0 ou 1 | boolean | mudança de estado |
+| `valve_in` | 0 ou 1 | boolean | mudança de estado |
+| `valve_out` | 0 ou 1 | boolean | mudança de estado |
+
+**Exemplo de Sequência de Envios:**
+
+```json
+// Distância mudou de 244.8 para 247.2 cm
+{"mac":"dc:06:75:67:6a:cc","type":"distance_cm","value":24720,"battery":5000,"uptime":3600,"rssi":-50}
+
+// Som detectado (água entrando)
+{"mac":"dc:06:75:67:6a:cc","type":"sound_in","value":1,"battery":5000,"uptime":3602,"rssi":-50}
+
+// Válvula entrada abriu
+{"mac":"dc:06:75:67:6a:cc","type":"valve_in","value":1,"battery":5000,"uptime":3605,"rssi":-50}
+```
+
+**Recursos em Todos os Nodes:**
+- **1 sensor ultrassônico** (distance_cm)
+- **2 válvulas** (valve_in, valve_out) - controle digital
+- **1 detector de som** (sound_in) - detecta água entrando
+- **RSSI** - força do sinal ESP-NOW
+- **Battery** - fonte DC 5V (5000mV)
+- **Uptime** - segundos desde boot
+
+**Hardware Idêntico:**
+- Todos os 5 nodes (RCON, RCAV, RB03, IE01, IE02) usam o **mesmo firmware**
+- Diferenciação via MAC address (backend resolve o mapeamento)
+- Não há nodes dual - cada reservatório tem seu próprio ESP32-C3
+
+**Mapeamento no Backend:**
+- MAC address único identifica o node
+- Backend mapeia MAC → reservatório(s) via tabela `node_mapping`
+- Datetime timestamp adicionado pelo servidor ao receber
+- Conversão: `value` int → float (divide por 100 para distance_cm)
+
+**Nota:** Bombas B03E/B03D são **elementos independentes** não controlados por ESP32
+
 ### 4.2 Regras de Transmissão
 
-**Enviar SOMENTE quando houver mudança significativa:**
+**Protocolo de Comunicação:**
+- **Sensor → Gateway**: ESP-NOW (alcance até 250m, sem necessidade de WiFi nos sensores)
+- **Gateway → Backend**: MQTT over WiFi (QoS 1)
+- **Fallback**: HTTP POST se MQTT falhar
 
-- Nível de água: variação > ±2 cm
-- Pressão: variação > ±0.2 bar
-- Estado de válvula/bomba: qualquer mudança
-- Periodicidade máxima: 30 segundos (mesmo sem mudança)
+**Envio Individual por Variável:**
+- Cada mudança significativa gera **1 payload** individual
+- Não há agregação de múltiplas variáveis no node
+- Backend agrupa por MAC + timestamp para análise
+
+**Quando Enviar:**
+- **distance_cm**: variação > ±2 cm (deadband)
+- **sound_in**: mudança de 0→1 ou 1→0 (água entrando)
+- **valve_in / valve_out**: mudança de estado (0↔1)
+- **Heartbeat**: a cada 30 segundos (envia último distance_cm mesmo sem mudança)
+
+**Conversão de Valores:**
+- `distance_cm`: float → int (multiplica por 100)
+  - 244.8 cm → 24480
+  - 180.5 cm → 18050
+- Estados digitais: 0 (FECHADA/OFF) ou 1 (ABERTA/ON)
+- `battery`: mV (fonte DC 5V = 5000mV)
+- `rssi`: dBm (negativo, ex: -50)
 
 ### 4.3 Filtragem de Ruído
 

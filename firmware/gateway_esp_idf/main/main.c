@@ -1,0 +1,295 @@
+/**
+ * AGUADA - Gateway v2.0 (ESP-IDF C)
+ * ESP-NOW Receiver → HTTP POST Bridge (with queue-based processing)
+ * ESP32-C3 SuperMini
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "esp_wifi.h"
+#include "esp_now.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "esp_mac.h"
+#include "esp_netif.h"
+#include "esp_http_client.h"
+
+#include "nvs_flash.h"
+#include "driver/gpio.h"
+#include "esp_timer.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+
+#define TAG "AGUADA_GATEWAY"
+
+// ============================================================================
+// CONFIGURAÇÕES
+// ============================================================================
+
+#define WIFI_SSID "luciano"
+#define WIFI_PASSWORD "Luciano19852012"
+#define BACKEND_URL "http://192.168.0.100:3000/api/telemetry"
+#define LED_BUILTIN GPIO_NUM_8
+#define HEARTBEAT_INTERVAL_MS 1000
+#define MAX_PAYLOAD_SIZE 256
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+typedef struct {
+    uint8_t src_addr[6];
+    char payload[MAX_PAYLOAD_SIZE];
+    int len;
+} espnow_packet_t;
+
+// ============================================================================
+// GLOBALS
+// ============================================================================
+
+static uint8_t gateway_mac[6];
+static int64_t last_heartbeat = 0;
+static bool led_state = false;
+static QueueHandle_t espnow_queue = NULL;
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+static void mac_to_string(const uint8_t *mac, char *str) {
+    snprintf(str, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+// ============================================================================
+// ESP-NOW CALLBACK (Fast - just enqueue)
+// ============================================================================
+
+static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
+    if (!recv_info || !espnow_queue) {
+        return;
+    }
+
+    espnow_packet_t packet = {0};
+    memcpy(packet.src_addr, recv_info->src_addr, 6);
+    
+    if (len >= MAX_PAYLOAD_SIZE) {
+        len = MAX_PAYLOAD_SIZE - 1;
+    }
+    memcpy(packet.payload, data, len);
+    packet.payload[len] = '\0';
+    packet.len = len;
+
+    // Enqueue without blocking
+    xQueueSendFromISR(espnow_queue, &packet, NULL);
+}
+
+// ============================================================================
+// HTTP POST TASK (Process queue)
+// ============================================================================
+
+static void http_post_task(void *pvParameters) {
+    espnow_packet_t packet;
+    
+    while (1) {
+        // Wait for packet (block until available)
+        if (xQueueReceive(espnow_queue, &packet, pdMS_TO_TICKS(1000))) {
+            char src_mac_str[18];
+            mac_to_string(packet.src_addr, src_mac_str);
+
+            // Debug output
+            ESP_LOGI(TAG, "");
+            ESP_LOGI(TAG, "╔════════════════════════════════════════════════════╗");
+            ESP_LOGI(TAG, "║ ✓ ESP-NOW recebido de: %s (%d bytes)", src_mac_str, packet.len);
+            ESP_LOGI(TAG, "╠════════════════════════════════════════════════════╣");
+            ESP_LOGI(TAG, "║ Dados: %s", packet.payload);
+            ESP_LOGI(TAG, "╚════════════════════════════════════════════════════╝");
+
+            // Make HTTP POST request
+            esp_http_client_config_t config = {
+                .url = BACKEND_URL,
+                .method = HTTP_METHOD_POST,
+                .timeout_ms = 5000,
+            };
+            
+            esp_http_client_handle_t client = esp_http_client_init(&config);
+            if (client) {
+                esp_http_client_set_header(client, "Content-Type", "application/json");
+                esp_http_client_set_post_field(client, packet.payload, packet.len);
+                
+                esp_err_t err = esp_http_client_perform(client);
+                if (err == ESP_OK) {
+                    int status = esp_http_client_get_status_code(client);
+                    if (status == 200 || status == 201) {
+                        ESP_LOGI(TAG, "→ Enviado via HTTP (status=%d)", status);
+                    } else {
+                        ESP_LOGW(TAG, "✗ HTTP status=%d", status);
+                    }
+                } else {
+                    ESP_LOGW(TAG, "✗ HTTP error: %s", esp_err_to_name(err));
+                }
+                esp_http_client_cleanup(client);
+            } else {
+                ESP_LOGW(TAG, "✗ Falha ao criar cliente HTTP");
+            }
+        }
+    }
+}
+
+// ============================================================================
+// WIFI INIT (PHY only)
+// ============================================================================
+
+static void wifi_init_light(void) {
+    ESP_LOGI(TAG, "Inicializando WiFi (PHY apenas)...");
+
+    // Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Create default event loop
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Initialize WiFi
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    // Set WiFi mode to STA
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+    // Start WiFi FIRST
+    ESP_ERROR_CHECK(esp_wifi_start());
+    vTaskDelay(pdMS_TO_TICKS(100));
+    
+    // Set channel AFTER start
+    ESP_ERROR_CHECK(esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE));
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    ESP_LOGI(TAG, "✓ WiFi inicializado (CH1, PHY apenas)");
+}
+
+// ============================================================================
+// ESP-NOW INIT
+// ============================================================================
+
+static void espnow_init(void) {
+    ESP_LOGI(TAG, "Inicializando ESP-NOW...");
+
+    // Get gateway MAC
+    esp_wifi_get_mac(WIFI_IF_STA, gateway_mac);
+    char mac_str[18];
+    mac_to_string(gateway_mac, mac_str);
+    ESP_LOGI(TAG, "Gateway MAC: %s", mac_str);
+
+    // Initialize ESP-NOW
+    ESP_ERROR_CHECK(esp_now_init());
+    ESP_LOGI(TAG, "✓ ESP-NOW inicializado");
+
+    // Register receive callback
+    ESP_ERROR_CHECK(esp_now_register_recv_cb(espnow_recv_cb));
+    ESP_LOGI(TAG, "✓ Callback ESP-NOW registrado");
+
+    // Add broadcast peer (FF:FF:FF:FF:FF:FF)
+    esp_now_peer_info_t peer = {0};
+    peer.channel = 1;
+    peer.encrypt = false;
+    memset(peer.peer_addr, 0xFF, 6);
+
+    ESP_ERROR_CHECK(esp_now_add_peer(&peer));
+    ESP_LOGI(TAG, "✓ Peer broadcast adicionado");
+}
+
+// ============================================================================
+// GPIO INIT
+// ============================================================================
+
+static void gpio_init(void) {
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << LED_BUILTIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+
+    // Initial LED state (off)
+    gpio_set_level(LED_BUILTIN, 0);
+
+    // Blink 3x fast
+    for (int i = 0; i < 3; i++) {
+        gpio_set_level(LED_BUILTIN, 1);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        gpio_set_level(LED_BUILTIN, 0);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    ESP_LOGI(TAG, "✓ GPIO inicializado (LED=%d)", LED_BUILTIN);
+}
+
+// ============================================================================
+// HEARTBEAT TASK
+// ============================================================================
+
+static void heartbeat_task(void *pvParameters) {
+    while (1) {
+        if (esp_timer_get_time() - last_heartbeat >= HEARTBEAT_INTERVAL_MS * 1000) {
+            last_heartbeat = esp_timer_get_time();
+            led_state = !led_state;
+            gpio_set_level(LED_BUILTIN, led_state ? 1 : 0);
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+// ============================================================================
+// APP MAIN
+// ============================================================================
+
+void app_main(void) {
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "╔═══════════════════════════════════════════════════════════╗");
+    ESP_LOGI(TAG, "║           AGUADA Gateway v2.0 (ESP-IDF C)                ║");
+    ESP_LOGI(TAG, "║           ESP-NOW → HTTP Bridge                         ║");
+    ESP_LOGI(TAG, "╚═══════════════════════════════════════════════════════════╝");
+    ESP_LOGI(TAG, "");
+
+    // Create packet queue
+    espnow_queue = xQueueCreate(10, sizeof(espnow_packet_t));
+    if (!espnow_queue) {
+        ESP_LOGE(TAG, "Falha ao criar fila ESP-NOW");
+        return;
+    }
+    ESP_LOGI(TAG, "✓ Fila ESP-NOW criada (10 slots)");
+
+    // Initialize GPIO
+    gpio_init();
+
+    // Initialize WiFi (PHY only)
+    wifi_init_light();
+
+    // Initialize ESP-NOW
+    espnow_init();
+
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "✓ Gateway inicializado e pronto!");
+    ESP_LOGI(TAG, "  - Aguardando dados dos sensores...");
+    ESP_LOGI(TAG, "");
+
+    // Create heartbeat task
+    xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 5, NULL);
+
+    // Create HTTP POST task
+    xTaskCreate(http_post_task, "http_post", 4096, NULL, 5, NULL);
+
+    // Keep main task alive
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+}

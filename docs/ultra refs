@@ -1,0 +1,130 @@
+#include <Arduino.h>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#include <esp_now.h>
+#include <WiFi.h>
+#include <math.h>
+
+// ===== CONFIG ESP-NOW =====
+uint8_t gatewayMAC[] = {0x30, 0xC6, 0xF7, 0x12, 0x34, 0x56}; // MAC do gateway
+
+// ===== CONFIG SENSOR ULTRASSOM =====
+int pinTrig = 4;
+int pinEcho = 5;
+
+// ===== CONFIG VÁLVULAS =====
+int pinEntrada = 8;
+int pinSaidaAZ = 9;
+int pinSaidaAV = 10;
+
+// ===== CONFIG RESERVATÓRIO =====
+struct Reservatorio {
+  float hsensor_cm;
+  float altura_cm;
+  float diametro_cm;
+};
+Reservatorio config;
+String device_id = "consumo";
+
+// ===== Funções =====
+bool loadConfig() {
+  if (!LittleFS.begin()) return false;
+  File file = LittleFS.open("/config.json", "r");
+  if (!file) return false;
+
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, file);
+  if (err) return false;
+
+  device_id = doc["device_id"].as<String>();
+  config.hsensor_cm  = doc["reservatorio"]["hsensor_cm"];
+  config.altura_cm   = doc["reservatorio"]["altura_cm"];
+  config.diametro_cm = doc["reservatorio"]["diametro_cm"];
+
+  pinTrig     = doc["ultrassom"]["trig"];
+  pinEcho     = doc["ultrassom"]["echo"];
+  pinEntrada  = doc["valvulas"]["entrada"];
+  pinSaidaAZ  = doc["valvulas"]["saida_az"];
+  pinSaidaAV  = doc["valvulas"]["saida_av"];
+
+  file.close();
+  return true;
+}
+
+long readUltrasonicCM() {
+  digitalWrite(pinTrig, LOW); delayMicroseconds(2);
+  digitalWrite(pinTrig, HIGH); delayMicroseconds(10);
+  digitalWrite(pinTrig, LOW);
+  long dur = pulseIn(pinEcho, HIGH, 30000);
+  return (dur * 0.034) / 2;
+}
+
+void calcularVolume(float dist_cm, float &nivel_cm, float &volume_m3, float &percentual) {
+  nivel_cm = config.altura_cm - (dist_cm - config.hsensor_cm);
+  nivel_cm = constrain(nivel_cm, 0, config.altura_cm);
+
+  float raio_m = (config.diametro_cm / 100.0) / 2.0;
+  volume_m3 = PI * pow(raio_m, 2) * (nivel_cm / 100.0);
+
+  float volume_max = PI * pow(raio_m, 2) * (config.altura_cm / 100.0);
+  percentual = (volume_m3 / volume_max) * 100.0;
+}
+
+// ===== Envio ESP-NOW =====
+void sendData(float nivel, float volume, float pct, int v1, int v2, int v3) {
+  StaticJsonDocument<256> doc;
+  doc["device_id"] = device_id;
+  doc["ts"] = millis() / 1000;
+  doc["nivel_cm"] = nivel;
+  doc["volume_m3"] = volume;
+  doc["percentual"] = pct;
+  JsonObject valvs = doc.createNestedObject("valvulas");
+  valvs["entrada"] = v1;
+  valvs["saida_az"] = v2;
+  valvs["saida_av"] = v3;
+
+  char buf[256];
+  size_t n = serializeJson(doc, buf);
+  esp_now_send(gatewayMAC, (uint8_t*)buf, n);
+
+  Serial.println("📤 Enviado via ESP-NOW:");
+  Serial.println(buf);
+}
+
+void setup() {
+  Serial.begin(115200);
+  if (!loadConfig()) {
+    Serial.println("❌ Falha ao carregar config.json");
+    while (true) delay(1000);
+  }
+
+  pinMode(pinTrig, OUTPUT);
+  pinMode(pinEcho, INPUT);
+  pinMode(pinEntrada, INPUT_PULLUP);
+  pinMode(pinSaidaAZ, INPUT_PULLUP);
+  pinMode(pinSaidaAV, INPUT_PULLUP);
+
+  WiFi.mode(WIFI_STA);
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("❌ ESP-NOW init failed");
+    return;
+  }
+  esp_now_peer_info_t peer;
+  memcpy(peer.peer_addr, gatewayMAC, 6);
+  peer.channel = 0;
+  peer.encrypt = false;
+  esp_now_add_peer(&peer);
+}
+
+void loop() {
+  long dist = readUltrasonicCM();
+  float nivel, volume, pct;
+  calcularVolume(dist, nivel, volume, pct);
+
+  int v1 = digitalRead(pinEntrada) == LOW ? 1 : 0;
+  int v2 = digitalRead(pinSaidaAZ) == LOW ? 1 : 0;
+  int v3 = digitalRead(pinSaidaAV) == LOW ? 1 : 0;
+
+  sendData(nivel, volume, pct, v1, v2, v3);
+  delay(30000); // envia a cada 30s
+}
