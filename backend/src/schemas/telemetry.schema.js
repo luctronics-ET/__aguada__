@@ -1,11 +1,32 @@
 import { z } from 'zod';
 
-// MAC address regex: AA:BB:CC:DD:EE:FF
-const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+// MAC address regex: AA:BB:CC:DD:EE:FF (case insensitive)
+const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/i;
 
 // ISO8601 datetime validation
 const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
 
+// Individual variable transmission schema (firmware format)
+// Example: {"mac":"20:6E:F1:6B:77:58","type":"distance_cm","value":24480,"battery":5000,"uptime":3,"rssi":-50}
+export const individualTelemetrySchema = z.object({
+  mac: z.string().regex(macRegex, 'MAC inválido (formato: AA:BB:CC:DD:EE:FF)'),
+  
+  type: z.enum(['distance_cm', 'valve_in', 'valve_out', 'sound_in'], {
+    errorMap: () => ({ message: 'Tipo inválido. Use: distance_cm, valve_in, valve_out, sound_in' })
+  }),
+  
+  value: z.number().int()
+    .refine((val) => !isNaN(val), 'Valor deve ser numérico')
+    .refine((val) => isFinite(val), 'Valor deve ser finito'),
+  
+  battery: z.number().int().min(0).max(6000).optional(), // mV (0-6V)
+  
+  rssi: z.number().int().min(-120).max(0).optional(), // dBm
+  
+  uptime: z.number().int().nonnegative().optional(), // seconds
+});
+
+// Legacy aggregated telemetry schema (for compatibility)
 export const telemetrySchema = z.object({
   node_mac: z.string().regex(macRegex, 'MAC inválido (formato: AA:BB:CC:DD:EE:FF)'),
   
@@ -65,6 +86,10 @@ export const calibrationSchema = z.object({
   
   observacao: z.string().max(500).optional(),
 });
+
+export function validateIndividualTelemetry(data) {
+  return individualTelemetrySchema.safeParse(data);
+}
 
 export function validateTelemetry(data) {
   return telemetrySchema.safeParse(data);

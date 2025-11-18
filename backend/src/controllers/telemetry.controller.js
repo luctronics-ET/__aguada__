@@ -1,4 +1,4 @@
-import { validateTelemetry, validateManualReading, validateCalibration } from '../schemas/telemetry.schema.js';
+import { validateTelemetry, validateIndividualTelemetry, validateManualReading, validateCalibration } from '../schemas/telemetry.schema.js';
 import sensorService from '../services/sensor.service.js';
 import readingService from '../services/reading.service.js';
 import compressionService from '../services/compression.service.js';
@@ -7,8 +7,135 @@ import logger from '../config/logger.js';
 /**
  * POST /api/telemetry
  * Endpoint para receber telemetria dos nodes ESP32
+ * Suporta dois formatos:
+ * 1. Individual: {"mac":"...","type":"distance_cm","value":24480,"battery":5000,"uptime":3,"rssi":-50}
+ * 2. Agregado: {"node_mac":"...","datetime":"...","data":[...],"meta":{...}}
  */
 export async function receiveTelemetry(req, res) {
+  try {
+    // Detectar formato baseado na presença do campo 'mac' vs 'node_mac'
+    const isIndividualFormat = 'mac' in req.body && 'type' in req.body;
+    
+    if (isIndividualFormat) {
+      return await receiveIndividualTelemetry(req, res);
+    } else {
+      return await receiveAggregatedTelemetry(req, res);
+    }
+  } catch (error) {
+    logger.error('Erro ao receber telemetria:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor',
+    });
+  }
+}
+
+/**
+ * Processa telemetria individual (formato firmware)
+ */
+async function receiveIndividualTelemetry(req, res) {
+  try {
+    // Validar payload
+    const validation = validateIndividualTelemetry(req.body);
+    
+    if (!validation.success) {
+      logger.warn('Telemetria individual inválida', { errors: validation.error.errors });
+      return res.status(400).json({
+        success: false,
+        error: 'Validação falhou',
+        details: validation.error.errors,
+      });
+    }
+    
+    const { mac, type, value, battery, rssi, uptime } = validation.data;
+    
+    // Identificar sensor pelo MAC + tipo de variável
+    const sensor = await sensorService.identifySensorByMac(mac, type);
+    
+    if (!sensor) {
+      logger.warn(`Sensor desconhecido: MAC=${mac}, type=${type}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Sensor não registrado',
+        mac,
+        type,
+      });
+    }
+    
+    // Converter valor conforme tipo
+    let valorReal = value;
+    let unidade = '';
+    
+    if (type === 'distance_cm') {
+      // distance_cm vem multiplicado por 100 (ex: 24480 = 244.8 cm)
+      valorReal = value / 100.0;
+      unidade = 'cm';
+    } else {
+      // valve_in, valve_out, sound_in são estados (0 ou 1)
+      valorReal = value;
+      unidade = 'boolean';
+    }
+    
+    const datetime = new Date();
+    
+    // Inserir leitura bruta
+    await readingService.insertRawReading({
+      sensor_id: sensor.sensor_id,
+      elemento_id: sensor.elemento_id,
+      variavel: type,
+      valor: valorReal,
+      unidade,
+      meta: {
+        battery_mv: battery,
+        rssi_dbm: rssi,
+        uptime_sec: uptime,
+        node_mac: mac,
+        raw_value: value,
+      },
+      fonte: 'sensor',
+      autor: mac,
+      modo: 'automatica',
+      observacao: null,
+      datetime,
+    });
+    
+    // Processar compressão assíncrona (apenas para distance_cm)
+    if (type === 'distance_cm') {
+      compressionService.processCompression(
+        sensor,
+        valorReal,
+        sensor.elemento_parametros,
+        datetime
+      ).catch(err => {
+        logger.error('Erro no processamento assíncrono:', err);
+      });
+    }
+    
+    logger.info('Telemetria individual recebida', {
+      mac,
+      type,
+      value: valorReal,
+      sensor_id: sensor.sensor_id,
+    });
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Telemetria recebida com sucesso',
+      sensor_id: sensor.sensor_id,
+      type,
+      value: valorReal,
+    });
+    
+  } catch (error) {
+    logger.error('Erro ao processar telemetria individual:', error);
+    throw error;
+  }
+}
+
+/**
+ * Processa telemetria agregada (formato legado)
+ */
+async function receiveAggregatedTelemetry(req, res) {
   try {
     // Validar payload
     const validation = validateTelemetry(req.body);
