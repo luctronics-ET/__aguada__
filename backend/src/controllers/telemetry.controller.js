@@ -3,6 +3,7 @@ import sensorService from '../services/sensor.service.js';
 import readingService from '../services/reading.service.js';
 import compressionService from '../services/compression.service.js';
 import logger from '../config/logger.js';
+import { broadcastReading } from '../websocket/wsHandler.js';
 
 /**
  * POST /api/telemetry
@@ -70,6 +71,15 @@ export async function receiveTelemetry(req, res) {
         sensor_id: sensor.sensor_id,
         elemento_id: sensor.elemento_id,
         valor: value,
+      });
+
+      // Broadcast reading via WebSocket
+      broadcastReading({
+        sensor_id: sensor.sensor_id,
+        mac: node_mac,
+        label: reading.label,
+        value: value,
+        datetime: datetime
       });
     }
     
