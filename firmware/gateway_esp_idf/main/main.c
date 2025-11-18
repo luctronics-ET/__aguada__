@@ -139,11 +139,29 @@ static void http_post_task(void *pvParameters) {
 }
 
 // ============================================================================
-// WIFI INIT (PHY only)
+// WIFI EVENT HANDLER
 // ============================================================================
 
-static void wifi_init_light(void) {
-    ESP_LOGI(TAG, "Inicializando WiFi (PHY apenas)...");
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        ESP_LOGI(TAG, "WiFi started, connecting...");
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGW(TAG, "WiFi disconnected, reconnecting...");
+        esp_wifi_connect();
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "✓ WiFi connected! IP: " IPSTR, IP2STR(&event->ip_info.ip));
+    }
+}
+
+// ============================================================================
+// WIFI INIT (Full connection for HTTP)
+// ============================================================================
+
+static void wifi_init_sta(void) {
+    ESP_LOGI(TAG, "Inicializando WiFi (modo STA completo)...");
 
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -153,25 +171,40 @@ static void wifi_init_light(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+    // Initialize network interface
+    ESP_ERROR_CHECK(esp_netif_init());
+    
     // Create default event loop
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    
+    // Create default WiFi STA
+    esp_netif_create_default_wifi_sta();
 
     // Initialize WiFi
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    // Set WiFi mode to STA
+    // Register event handlers
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
+
+    // Configure WiFi
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASSWORD,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+        },
+    };
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-
-    // Start WiFi FIRST
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
-    vTaskDelay(pdMS_TO_TICKS(100));
     
-    // Set channel AFTER start
+    // Set channel for ESP-NOW compatibility
     ESP_ERROR_CHECK(esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE));
-    vTaskDelay(pdMS_TO_TICKS(100));
 
-    ESP_LOGI(TAG, "✓ WiFi inicializado (CH1, PHY apenas)");
+    ESP_LOGI(TAG, "✓ WiFi inicializado (SSID: %s, CH1)", WIFI_SSID);
 }
 
 // ============================================================================
@@ -271,8 +304,12 @@ void app_main(void) {
     // Initialize GPIO
     gpio_init();
 
-    // Initialize WiFi (PHY only)
-    wifi_init_light();
+    // Initialize WiFi (full STA mode for HTTP)
+    wifi_init_sta();
+    
+    // Wait for WiFi connection
+    ESP_LOGI(TAG, "Aguardando conexão WiFi...");
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
     // Initialize ESP-NOW
     espnow_init();

@@ -126,8 +126,8 @@ int read_ultrasonic_distance(void) {
     // Velocidade do som: 343 m/s = 0.0343 cm/μs
     // Distância = (duração * 0.0343) / 2
     // Para evitar float: distance_cm = (duration * 343) / (2 * 10000) = (duration * 343) / 20000
-    // Multiplicado por 100: distance_cm_x100 = (duration * 343 * 100) / 20000 = (duration * 34300) / 20000
-    int distance_cm_x100 = (int)((duration * 34300) / 20000);
+    // Multiplicado por 100: distance_cm_x100 = (duration * 343) / (2 * 100) = (duration * 343) / 200
+    int distance_cm_x100 = (int)((duration * 343) / 200);
     
     ESP_LOGD(TAG, "Duration: %lld μs, Distance: %d.%02d cm", 
              duration, distance_cm_x100 / 100, distance_cm_x100 % 100);
@@ -251,7 +251,13 @@ void init_espnow(void) {
 
 // ========== ENVIO INDIVIDUAL DE TELEMETRIA ==========
 void send_telemetry(const char *type, int value) {
-    int rssi = -50;
+    // Ler RSSI real do WiFi
+    int rssi = 0;
+    esp_wifi_sta_get_rssi(&rssi);
+    if (rssi == 0) {
+        rssi = -50;  // Fallback se não conseguir ler
+    }
+    
     int battery = 5000;
     uint32_t uptime = esp_timer_get_time() / 1000000;
     
@@ -279,13 +285,14 @@ void check_and_send_changes(void) {
     // Ler distância
     int distance_cm = read_distance_filtered();
     
-    // Ler estados digitais
+    // Ler estados digitais (uma única vez por ciclo)
     uint8_t valve_in = read_valve_in();
     uint8_t valve_out = read_valve_out();
     uint8_t sound_in = read_sound_in();
     
-    // Enviar distance_cm se mudou além do deadband
+    // Processar distance_cm
     if (distance_cm > 0) {
+        // Primeira leitura ou mudança além do deadband
         if (last_distance_cm < 0 || 
             abs(distance_cm - last_distance_cm) >= (DEADBAND_CM * 100)) {
             send_telemetry("distance_cm", distance_cm);
@@ -293,21 +300,33 @@ void check_and_send_changes(void) {
         } else {
             ESP_LOGD(TAG, "Distância estável (deadband=%dcm)", DEADBAND_CM);
         }
+    } else if (distance_cm == -1) {
+        // Timeout (sensor não respondeu)
+        if (last_distance_cm != -1) {
+            send_telemetry("distance_cm", 0);  // Enviar erro code 0
+            last_distance_cm = -1;
+        }
+    } else if (distance_cm == -2) {
+        // Fora de range
+        if (last_distance_cm != -2) {
+            send_telemetry("distance_cm", 1);  // Enviar erro code 1
+            last_distance_cm = -2;
+        }
     }
     
-    // Enviar valve_in se mudou de estado
+    // Processar valve_in (enviar em primeira leitura ou mudança)
     if (last_valve_in == 255 || valve_in != last_valve_in) {
         send_telemetry("valve_in", valve_in);
         last_valve_in = valve_in;
     }
     
-    // Enviar valve_out se mudou de estado
+    // Processar valve_out (enviar em primeira leitura ou mudança)
     if (last_valve_out == 255 || valve_out != last_valve_out) {
         send_telemetry("valve_out", valve_out);
         last_valve_out = valve_out;
     }
     
-    // Enviar sound_in se mudou de estado
+    // Processar sound_in (enviar em primeira leitura ou mudança)
     if (last_sound_in == 255 || sound_in != last_sound_in) {
         send_telemetry("sound_in", sound_in);
         last_sound_in = sound_in;
@@ -317,52 +336,21 @@ void check_and_send_changes(void) {
 // ========== TASK DE TELEMETRIA ==========
 void telemetry_task(void *pvParameters) {
     ESP_LOGI(TAG, "Telemetria: intervalo %d ms", HEARTBEAT_INTERVAL_MS);
+    
+    uint32_t cycle_count = 0;
 
     while (1) {
-        // 1) Envia apenas mudanças significativas
+        // A cada ciclo, verifica mudanças e envia
+        // Apenas envia variáveis quando mudam ou na primeira leitura.
+        // Não há envio periódico de heartbeat dos últimos valores conhecidos.
         check_and_send_changes();
 
-        // 2) Heartbeat: envia últimos valores conhecidos mesmo sem mudança
-        // Distance
-        if (last_distance_cm > 0) {
-            send_telemetry("distance_cm", last_distance_cm);
-        } else if (last_distance_cm == -1) {
-            // Timeout (sensor não respondeu) → enviar 0
-            send_telemetry("distance_cm", 0);
-        } else if (last_distance_cm == -2) {
-            // Fora de range → enviar 1
-            send_telemetry("distance_cm", 1);
-        } else {
-            // Sem leitura anterior válida: tenta ler e enviar uma vez
-            int hb_dist = read_distance_filtered();
-            if (hb_dist > 0) {
-                last_distance_cm = hb_dist;
-                send_telemetry("distance_cm", hb_dist);
-            } else if (hb_dist == -1) {
-                last_distance_cm = -1;
-                send_telemetry("distance_cm", 0);
-            } else if (hb_dist == -2) {
-                last_distance_cm = -2;
-                send_telemetry("distance_cm", 1);
-            }
-        }
-
-        // States (valves and sound) - usa últimos valores se conhecidos, senão lê agora
-        uint8_t hb_valve_in = (last_valve_in == 255) ? read_valve_in() : last_valve_in;
-        uint8_t hb_valve_out = (last_valve_out == 255) ? read_valve_out() : last_valve_out;
-        uint8_t hb_sound_in = (last_sound_in == 255) ? read_sound_in() : last_sound_in;
-
-        // Atualiza caches caso estivessem desconhecidos
-        if (last_valve_in == 255) last_valve_in = hb_valve_in;
-        if (last_valve_out == 255) last_valve_out = hb_valve_out;
-        if (last_sound_in == 255) last_sound_in = hb_sound_in;
-
-        send_telemetry("valve_in", hb_valve_in);
-        send_telemetry("valve_out", hb_valve_out);
-        send_telemetry("sound_in", hb_sound_in);
-
+        cycle_count++;
+        
+        // Log de estatísticas a cada 10 pacotes enviados
         if (packets_sent > 0 && packets_sent % 10 == 0) {
-            ESP_LOGI(TAG, "Stats - OK:%lu FAIL:%lu", packets_sent, packets_failed);
+            ESP_LOGI(TAG, "Stats - OK:%lu FAIL:%lu (ciclo %lu)", 
+                     packets_sent, packets_failed, cycle_count);
         }
 
         vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_INTERVAL_MS));
