@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dados e Tabelas - AGUADA</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <style>
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            color: var(--text-dark);
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--accent-purple);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-blue);
+        }
+
+        .btn-secondary {
+            background: var(--background-light);
+            color: var(--text-dark);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .data-table-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead {
+            background: var(--background-light);
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-dark);
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+
+        th:hover {
+            background: var(--border-color);
+        }
+
+        th.sortable::after {
+            content: '⇅';
+            margin-left: 5px;
+            opacity: 0.5;
+        }
+
+        th.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        th.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tbody tr:hover {
+            background: var(--background-light);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-online {
+            background: var(--success-green);
+        }
+
+        .status-offline {
+            background: var(--danger-red);
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .pagination-info {
+            color: var(--text-muted);
+        }
+
+        .pagination-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Dados e Tabelas</h1>
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="painel.html">Painel</a>
+                <a href="dados.html" class="active">Dados</a>
+                <a href="consumo.html">Consumo</a>
+                <a href="abastecimento.html">Abastecimento</a>
+                <a href="manutencao.html">Manutenção</a>
+                <a href="history.html">Histórico</a>
+                <a href="alerts.html">Alertas</a>
+                <a href="config.html">Config</a>
+                <a href="system.html">Sistema</a>
+            </nav>
+        </header>
+
+        <div class="controls">
+            <div class="controls-row">
+                <div class="filter-group">
+                    <label>Sensor:</label>
+                    <select id="filterSensor">
+                        <option value="">Todos</option>
+                        <option value="RCON">RCON</option>
+                        <option value="RCAV">RCAV</option>
+                        <option value="RB03">RB03</option>
+                        <option value="IE01">IE01</option>
+                        <option value="IE02">IE02</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Tipo:</label>
+                    <select id="filterType">
+                        <option value="">Todos</option>
+                        <option value="distance_cm">Distância</option>
+                        <option value="valve_in">Válvula Entrada</option>
+                        <option value="valve_out">Válvula Saída</option>
+                        <option value="sound_in">Detector Som</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Data Início:</label>
+                    <input type="date" id="filterDateStart">
+                </div>
+
+                <div class="filter-group">
+                    <label>Data Fim:</label>
+                    <input type="date" id="filterDateEnd">
+                </div>
+
+                <button class="btn btn-primary" onclick="applyFilters()">Aplicar Filtros</button>
+                <button class="btn btn-secondary" onclick="clearFilters()">Limpar</button>
+            </div>
+
+            <div class="export-buttons">
+                <button class="btn btn-secondary" onclick="exportCSV()">📄 Exportar CSV</button>
+                <button class="btn btn-secondary" onclick="exportExcel()">📊 Exportar Excel</button>
+                <button class="btn btn-secondary" onclick="exportPDF()">📑 Exportar PDF</button>
+            </div>
+        </div>
+
+        <div class="data-table-container">
+            <h2 style="color: var(--primary-blue); margin-bottom: 20px;">Leituras Recentes</h2>
+            
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-column="timestamp">Data/Hora</th>
+                        <th class="sortable" data-column="sensor">Sensor</th>
+                        <th class="sortable" data-column="type">Tipo</th>
+                        <th class="sortable" data-column="value">Valor</th>
+                        <th class="sortable" data-column="volume">Volume %</th>
+                        <th class="sortable" data-column="battery">Bateria (V)</th>
+                        <th class="sortable" data-column="rssi">RSSI (dBm)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #999;">
+                            Carregando dados...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="pagination">
+                <div class="pagination-info">
+                    Mostrando <span id="pageStart">0</span> - <span id="pageEnd">0</span> de <span id="totalRows">0</span> registros
+                </div>
+                <div class="pagination-buttons">
+                    <button class="btn btn-secondary" onclick="previousPage()" id="btnPrev">← Anterior</button>
+                    <span id="pageInfo">Página 1</span>
+                    <button class="btn btn-secondary" onclick="nextPage()" id="btnNext">Próxima →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/app.js"></script>
+    <script>
+        let tableData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        let rowsPerPage = 50;
+        let sortColumn = 'timestamp';
+        let sortDirection = 'desc';
+
+        // Load data from API or mock data
+        async function loadTableData() {
+            // Mock data for now - in production, fetch from API
+            tableData = generateMockData(200);
+            filteredData = [...tableData];
+            renderTable();
+        }
+
+        function generateMockData(count) {
+            const data = [];
+            const sensors = ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'];
+            const types = ['distance_cm', 'valve_in', 'valve_out', 'sound_in'];
+            
+            for (let i = 0; i < count; i++) {
+                const sensor = sensors[Math.floor(Math.random() * sensors.length)];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const timestamp = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000);
+                
+                let value;
+                if (type === 'distance_cm') {
+                    value = Math.floor(Math.random() * 40000) + 5000;
+                } else {
+                    value = Math.random() > 0.5 ? 1 : 0;
+                }
+
+                data.push({
+                    timestamp,
+                    sensor,
+                    type,
+                    value,
+                    battery: 4800 + Math.random() * 400,
+                    rssi: -40 - Math.random() * 30,
+                    status: Math.random() > 0.1 ? 'online' : 'offline'
+                });
+            }
+            
+            return data.sort((a, b) => b.timestamp - a.timestamp);
+        }
+
+        function applyFilters() {
+            const sensor = document.getElementById('filterSensor').value;
+            const type = document.getElementById('filterType').value;
+            const dateStart = document.getElementById('filterDateStart').value;
+            const dateEnd = document.getElementById('filterDateEnd').value;
+
+            filteredData = tableData.filter(row => {
+                if (sensor && row.sensor !== sensor) return false;
+                if (type && row.type !== type) return false;
+                
+                if (dateStart) {
+                    const start = new Date(dateStart);
+                    if (row.timestamp < start) return false;
+                }
+                
+                if (dateEnd) {
+                    const end = new Date(dateEnd);
+                    end.setHours(23, 59, 59);
+                    if (row.timestamp > end) return false;
+                }
+                
+                return true;
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        function clearFilters() {
+            document.getElementById('filterSensor').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterDateStart').value = '';
+            document.getElementById('filterDateEnd').value = '';
+            filteredData = [...tableData];
+            currentPage = 1;
+            renderTable();
+        }
+
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+
+            filteredData.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (column === 'timestamp') {
+                    aVal = new Date(aVal);
+                    bVal = new Date(bVal);
+                }
+
+                if (sortDirection === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = filteredData.slice(start, end);
+
+            if (pageData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #999;">Nenhum dado encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = pageData.map(row => {
+                const volume = row.type === 'distance_cm' ? getVolumePercent(row.sensor, row.value) : '-';
+                const displayValue = row.type === 'distance_cm' 
+                    ? `${(row.value / 100).toFixed(2)} cm` 
+                    : row.value === 1 ? 'Ativo' : 'Inativo';
+                
+                return `
+                    <tr>
+                        <td>${formatDateTime(row.timestamp)}</td>
+                        <td><strong>${row.sensor}</strong></td>
+                        <td>${formatType(row.type)}</td>
+                        <td>${displayValue}</td>
+                        <td>${typeof volume === 'number' ? volume.toFixed(1) + '%' : volume}</td>
+                        <td>${(row.battery / 1000).toFixed(2)}</td>
+                        <td>${row.rssi.toFixed(0)}</td>
+                        <td>
+                            <span class="status-dot status-${row.status}"></span>
+                            ${row.status === 'online' ? 'Online' : 'Offline'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Update pagination
+            document.getElementById('pageStart').textContent = start + 1;
+            document.getElementById('pageEnd').textContent = Math.min(end, filteredData.length);
+            document.getElementById('totalRows').textContent = filteredData.length;
+            document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${Math.ceil(filteredData.length / rowsPerPage)}`;
+            
+            document.getElementById('btnPrev').disabled = currentPage === 1;
+            document.getElementById('btnNext').disabled = end >= filteredData.length;
+
+            // Update sort indicators
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.column === sortColumn) {
+                    th.classList.add(`sort-${sortDirection}`);
+                }
+            });
+        }
+
+        function formatType(type) {
+            const types = {
+                'distance_cm': 'Distância',
+                'valve_in': 'Válv. Entrada',
+                'valve_out': 'Válv. Saída',
+                'sound_in': 'Som Detectado'
+            };
+            return types[type] || type;
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage * rowsPerPage < filteredData.length) {
+                currentPage++;
+                renderTable();
+            }
+        }
+
+        function exportCSV() {
+            const headers = ['Data/Hora', 'Sensor', 'Tipo', 'Valor', 'Volume %', 'Bateria (V)', 'RSSI (dBm)', 'Status'];
+            const rows = filteredData.map(row => [
+                formatDateTime(row.timestamp),
+                row.sensor,
+                formatType(row.type),
+                row.type === 'distance_cm' ? (row.value / 100).toFixed(2) : (row.value === 1 ? 'Ativo' : 'Inativo'),
+                row.type === 'distance_cm' ? getVolumePercent(row.sensor, row.value).toFixed(1) : '-',
+                (row.battery / 1000).toFixed(2),
+                row.rssi.toFixed(0),
+                row.status
+            ]);
+
+            const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `aguada-dados-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+
+        function exportExcel() {
+            alert('Exportação Excel será implementada em breve');
+        }
+
+        function exportPDF() {
+            alert('Exportação PDF será implementada em breve');
+        }
+
+        // Add click handlers for sortable columns
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                sortTable(th.dataset.column);
+            });
+        });
+
+        // Initialize
+        loadTableData();
+    </script>
+</body>
+</html>
