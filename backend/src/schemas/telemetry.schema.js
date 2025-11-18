@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
-// MAC address regex: AA:BB:CC:DD:EE:FF (case insensitive)
-const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/i;
+// MAC address regex: AA:BB:CC:DD:EE:FF
+const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
 
 // ISO8601 datetime validation
 const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
 
 // Individual variable transmission schema (firmware format)
-// Example: {"mac":"20:6E:F1:6B:77:58","type":"distance_cm","value":24480,"battery":5000,"uptime":3,"rssi":-50}
+// Example: {"mac":"20:6E:F1:6B:77:58","type":"distance_cm","value":2448,"battery":5000,"uptime":3,"rssi":-50}
 export const individualTelemetrySchema = z.object({
   mac: z.string().regex(macRegex, 'MAC inválido (formato: AA:BB:CC:DD:EE:FF)'),
   

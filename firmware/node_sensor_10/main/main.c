@@ -341,10 +341,10 @@ void telemetry_task(void *pvParameters) {
 
     while (1) {
         // A cada ciclo, verifica mudanças e envia
+        // Apenas envia variáveis quando mudam ou na primeira leitura.
+        // Não há envio periódico de heartbeat dos últimos valores conhecidos.
         check_and_send_changes();
 
-        // Heartbeat: a cada 30s (ou outro intervalo), envia últimos valores conhecidos
-        // independente de mudança (para confirmar que o node está vivo)
         cycle_count++;
         
         // Log de estatísticas a cada 10 pacotes enviados

@@ -67,7 +67,7 @@ async function receiveIndividualTelemetry(req, res) {
     let unidade = '';
     
     if (type === 'distance_cm') {
-      // distance_cm vem multiplicado por 100 (ex: 24480 = 244.8 cm)
+      // distance_cm vem multiplicado por 10 (ex: 2448 = 244.8 cm)
       valorReal = value / 100.0;
       unidade = 'cm';
     } else {
