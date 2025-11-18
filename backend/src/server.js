@@ -94,6 +94,9 @@ app.use((err, req, res, next) => {
 // STARTUP
 // =============================================================================
 
+import http from 'http';
+import { initWebSocket } from './websocket/wsHandler.js';
+
 async function startServer() {
   try {
     // Test database connection
@@ -105,11 +108,18 @@ async function startServer() {
     // Connect to Redis
     await connectRedis();
     
+    // Create HTTP server
+    const server = http.createServer(app);
+
+    // Initialize WebSocket
+    initWebSocket(server);
+    
     // Start HTTP server
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       logger.info(`🚀 Servidor rodando na porta ${PORT}`);
       logger.info(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 API: http://localhost:${PORT}/api`);
+      logger.info(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
     });
     
   } catch (error) {

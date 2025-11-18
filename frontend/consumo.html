@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise de Consumo - AGUADA</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-card h3 {
+            color: var(--primary-blue);
+            margin-bottom: 15px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--primary-blue);
+            margin: 10px 0;
+        }
+
+        .stat-card .label {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .stat-card .change {
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .change.positive {
+            color: var(--success-green);
+        }
+
+        .change.negative {
+            color: var(--danger-red);
+        }
+
+        .period-selector {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .period-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .period-btn:hover {
+            background: var(--background-light);
+        }
+
+        .period-btn.active {
+            background: var(--accent-purple);
+            color: white;
+            border-color: var(--accent-purple);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 Análise de Consumo</h1>
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="painel.html">Painel</a>
+                <a href="dados.html">Dados</a>
+                <a href="consumo.html" class="active">Consumo</a>
+                <a href="abastecimento.html">Abastecimento</a>
+                <a href="manutencao.html">Manutenção</a>
+                <a href="history.html">Histórico</a>
+                <a href="alerts.html">Alertas</a>
+                <a href="config.html">Config</a>
+                <a href="system.html">Sistema</a>
+            </nav>
+        </header>
+
+        <div class="period-selector">
+            <label style="font-weight: 500; color: var(--text-dark);">Período:</label>
+            <button class="period-btn active" onclick="setPeriod('day')">Hoje</button>
+            <button class="period-btn" onclick="setPeriod('week')">7 Dias</button>
+            <button class="period-btn" onclick="setPeriod('month')">30 Dias</button>
+            <button class="period-btn" onclick="setPeriod('custom')">Personalizado</button>
+            <input type="date" id="customDateStart" style="display: none; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px;">
+            <input type="date" id="customDateEnd" style="display: none; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px;">
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Consumo Total (Hoje)</div>
+                <div class="value" id="consumoTotal">0 m³</div>
+                <div class="change positive" id="consumoChange">▲ 0% vs ontem</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Consumo Médio (Diário)</div>
+                <div class="value" id="consumoMedio">0 L/dia</div>
+                <div class="change" id="consumoMedioChange">— 0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Taxa Atual</div>
+                <div class="value" id="taxaAtual">0 L/h</div>
+                <div class="change" id="taxaChange">— 0 L/h</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Pico de Consumo</div>
+                <div class="value" id="picoConsumo">0 L/h</div>
+                <div class="change" id="picoHorario">às --:--</div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>Consumo por Hora (Últimas 24h)</h3>
+                <canvas id="consumoHorarioChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Consumo por Reservatório</h3>
+                <canvas id="consumoReservatorioChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>Tendência de Consumo (7 dias)</h3>
+                <canvas id="tendenciaChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Distribuição Horária</h3>
+                <canvas id="distribuicaoChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card" style="margin-bottom: 20px;">
+            <h3>Comparativo Mensal</h3>
+            <canvas id="comparativoChart"></canvas>
+        </div>
+    </div>
+
+    <script src="assets/app.js"></script>
+    <script>
+        let currentPeriod = 'day';
+        let charts = {};
+
+        // Initialize charts
+        function initCharts() {
+            // Consumo por Hora
+            const ctx1 = document.getElementById('consumoHorarioChart').getContext('2d');
+            charts.consumoHorario = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Consumo (L)',
+                        data: generateMockHourlyData(),
+                        backgroundColor: 'rgba(103, 126, 234, 0.7)',
+                        borderColor: 'rgba(103, 126, 234, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Litros' }
+                        }
+                    }
+                }
+            });
+
+            // Consumo por Reservatório
+            const ctx2 = document.getElementById('consumoReservatorioChart').getContext('2d');
+            charts.consumoReservatorio = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'],
+                    datasets: [{
+                        data: [45, 15, 20, 10, 10],
+                        backgroundColor: [
+                            'rgba(30, 60, 114, 0.8)',
+                            'rgba(103, 126, 234, 0.8)',
+                            'rgba(118, 75, 162, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(245, 158, 11, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Tendência (7 dias)
+            const ctx3 = document.getElementById('tendenciaChart').getContext('2d');
+            charts.tendencia = new Chart(ctx3, {
+                type: 'line',
+                data: {
+                    labels: generateDayLabels(7),
+                    datasets: [{
+                        label: 'Consumo (m³)',
+                        data: generateMockDailyData(7),
+                        borderColor: 'rgba(103, 126, 234, 1)',
+                        backgroundColor: 'rgba(103, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'm³' }
+                        }
+                    }
+                }
+            });
+
+            // Distribuição Horária
+            const ctx4 = document.getElementById('distribuicaoChart').getContext('2d');
+            charts.distribuicao = new Chart(ctx4, {
+                type: 'radar',
+                data: {
+                    labels: ['0-4h', '4-8h', '8-12h', '12-16h', '16-20h', '20-24h'],
+                    datasets: [{
+                        label: 'Média de Consumo',
+                        data: [10, 20, 45, 60, 50, 25],
+                        borderColor: 'rgba(103, 126, 234, 1)',
+                        backgroundColor: 'rgba(103, 126, 234, 0.2)',
+                        pointBackgroundColor: 'rgba(103, 126, 234, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        r: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Comparativo Mensal
+            const ctx5 = document.getElementById('comparativoChart').getContext('2d');
+            charts.comparativo = new Chart(ctx5, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+                    datasets: [
+                        {
+                            label: '2024',
+                            data: generateMockMonthlyData(),
+                            backgroundColor: 'rgba(103, 126, 234, 0.7)'
+                        },
+                        {
+                            label: '2025',
+                            data: generateMockMonthlyData(),
+                            backgroundColor: 'rgba(118, 75, 162, 0.7)'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'm³' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update statistics
+        function updateStats() {
+            // Mock data - in production, fetch from API
+            const consumoTotal = (Math.random() * 50 + 20).toFixed(1);
+            const consumoMedio = (Math.random() * 2000 + 1000).toFixed(0);
+            const taxaAtual = (Math.random() * 200 + 50).toFixed(0);
+            const picoConsumo = (Math.random() * 300 + 100).toFixed(0);
+
+            document.getElementById('consumoTotal').textContent = `${consumoTotal} m³`;
+            document.getElementById('consumoMedio').textContent = `${consumoMedio} L/dia`;
+            document.getElementById('taxaAtual').textContent = `${taxaAtual} L/h`;
+            document.getElementById('picoConsumo').textContent = `${picoConsumo} L/h`;
+
+            // Update changes
+            const change = (Math.random() * 20 - 10).toFixed(1);
+            const changeEl = document.getElementById('consumoChange');
+            changeEl.textContent = `${change > 0 ? '▲' : '▼'} ${Math.abs(change)}% vs ontem`;
+            changeEl.className = change > 0 ? 'change positive' : 'change negative';
+
+            document.getElementById('picoHorario').textContent = `às ${Math.floor(Math.random() * 24)}:00`;
+        }
+
+        function setPeriod(period) {
+            currentPeriod = period;
+            
+            // Update button states
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            if (period === 'custom') {
+                document.getElementById('customDateStart').style.display = 'inline-block';
+                document.getElementById('customDateEnd').style.display = 'inline-block';
+            } else {
+                document.getElementById('customDateStart').style.display = 'none';
+                document.getElementById('customDateEnd').style.display = 'none';
+            }
+
+            // Update charts based on period
+            updateCharts();
+        }
+
+        function updateCharts() {
+            // Update chart data based on selected period
+            // In production, fetch from API
+            updateStats();
+        }
+
+        // Helper functions for mock data
+        function generateMockHourlyData() {
+            return Array.from({length: 24}, () => Math.floor(Math.random() * 500 + 100));
+        }
+
+        function generateMockDailyData(days) {
+            return Array.from({length: days}, () => (Math.random() * 30 + 20).toFixed(1));
+        }
+
+        function generateMockMonthlyData() {
+            return Array.from({length: 12}, () => (Math.random() * 800 + 400).toFixed(0));
+        }
+
+        function generateDayLabels(days) {
+            const labels = [];
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+            }
+            return labels;
+        }
+
+        // Initialize
+        initCharts();
+        updateStats();
+    </script>
+</body>
+</html>

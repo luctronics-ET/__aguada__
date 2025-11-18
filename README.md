@@ -192,40 +192,94 @@ idf.py -p /dev/ttyACM0 flash monitor
 
 ## 📊 Funcionalidades
 
-### ✅ Implementado
+### ✅ Implementado - Sistema BMS/CMMS/SCADA Completo
 
-- [x] Firmware ESP32-C3 com sensor AJ-SR04M
-- [x] Filtro de mediana (11 amostras)
-- [x] Cálculo de volume e percentual
-- [x] Backend API REST (3 endpoints)
-- [x] Validação rigorosa (Zod schemas)
-- [x] Compressão de dados (deadband 2cm)
-- [x] Detecção de eventos (abastecimento, vazamento, nível crítico)
-- [x] Schema PostgreSQL + TimescaleDB
-- [x] Retenção e compressão automática
-- [x] Sistema de auditoria completo
-- [x] Comunicação ESP-NOW sensor → gateway
-- [x] Gateway com WiFi + MQTT QoS 1
-- [x] HTTP fallback no gateway
-- [x] Watchdog timer
-- [x] Detecção de falhas de sensor
+#### Frontend (10 Páginas)
+- [x] **index.html** - Dashboard principal com cards de sensores
+- [x] **painel.html** - Diagrama visual hidráulico com SVG/CSS
+- [x] **dados.html** - Tabelas completas com filtros, ordenação e paginação
+- [x] **consumo.html** - Análise de consumo com 5 gráficos Chart.js
+- [x] **abastecimento.html** - Monitoramento de abastecimento em tempo real
+- [x] **manutencao.html** - Gestão CMMS de manutenção (ordens, calendário, estatísticas)
+- [x] **history.html** - Histórico de leituras com gráficos
+- [x] **alerts.html** - Sistema de alertas e notificações
+- [x] **config.html** - Configurações de sensores e sistema
+- [x] **system.html** - Status e diagnósticos do sistema
 
-### 🔄 Em Desenvolvimento
+#### Backend API (32 Endpoints REST)
 
-- [ ] Dashboard Grafana
-- [ ] Relatório diário automático (06:00h)
-- [ ] Cálculo de consumo por período
-- [ ] Interface web de configuração
-- [ ] App mobile
-- [ ] Sistema de alertas (email/SMS)
+**Telemetria (3 endpoints)**
+- [x] POST /api/telemetry - Recebe dados dos ESP32
+- [x] POST /api/manual-reading - Leituras manuais
+- [x] POST /api/calibration - Calibração de sensores
 
-### 🎯 Roadmap (v2.0)
+**Leituras (4 endpoints)**
+- [x] GET /api/readings/latest - Últimas leituras
+- [x] GET /api/readings/daily-summary - Resumo diário
+- [x] GET /api/readings/history/:sensor_id - Histórico
+- [x] GET /api/readings/export - Exportar CSV
 
-- [ ] Controle automático de bombas
-- [ ] Machine Learning para predição
-- [ ] Simulador hidráulico
-- [ ] Multi-tenancy
+**Sensores (4 endpoints)**
+- [x] GET /api/sensors - Listar sensores
+- [x] GET /api/sensors/status - Status de conexão
+- [x] GET /api/sensors/:sensor_id - Detalhes do sensor
+- [x] PUT /api/sensors/:sensor_id - Atualizar configuração
+
+**Alertas (5 endpoints)**
+- [x] GET /api/alerts - Listar alertas (com filtros)
+- [x] GET /api/alerts/summary - Resumo de alertas
+- [x] POST /api/alerts - Criar alerta
+- [x] PUT /api/alerts/:alert_id/resolve - Resolver alerta
+- [x] GET /api/alerts/export - Exportar CSV
+
+**Estatísticas (4 endpoints)**
+- [x] GET /api/stats/daily - Estatísticas diárias
+- [x] GET /api/stats/consumption - Análise de consumo
+- [x] GET /api/stats/sensors - Estatísticas de sensores
+- [x] GET /api/stats/events - Estatísticas de eventos
+
+**Sistema (4 endpoints)**
+- [x] GET /api/system/health - Health check completo
+- [x] GET /api/system/logs - Logs do sistema
+- [x] GET /api/system/metrics - Métricas de performance
+- [x] POST /api/system/restart - Reiniciar sistema
+
+#### Recursos Avançados
+
+**WebSocket Real-time**
+- [x] Servidor WebSocket em /ws
+- [x] Broadcast de leituras em tempo real
+- [x] Broadcast de alertas
+- [x] Cliente com reconexão automática
+- [x] Ping/pong keep-alive
+
+**Exportação de Dados**
+- [x] Export leituras para CSV
+- [x] Export alertas para CSV
+- [x] Função genérica de exportação
+- [x] Botões de export nas páginas
+
+**Utilitários Frontend**
+- [x] 30+ funções utilitárias (formatação, validação, storage)
+- [x] Debounce e throttle
+- [x] Toast notifications
+- [x] Copy to clipboard
+- [x] URL parameter helpers
+
+**Características BMS/CMMS/SCADA**
+- [x] **BMS**: Monitoramento em tempo real, dashboards, KPIs, tendências
+- [x] **CMMS**: Ordens de manutenção, agendamento, calendário, estatísticas
+- [x] **SCADA**: Diagrama P&ID, controle visual, indicadores de estado
+- [x] **Real-time**: WebSocket para atualizações instantâneas
+- [x] **Offline**: Funciona 100% em rede local sem internet
+
+### 🔄 Em Desenvolvimento (Futuro)
+- [ ] Controle automático de bombas via API
+- [ ] Machine Learning para predição de consumo
+- [ ] App mobile React Native
+- [ ] Sistema de notificações (email/SMS)
 - [ ] API GraphQL
+- [ ] Multi-tenancy
 
 ## 🤖 MCP Server (Model Context Protocol)
 
@@ -318,63 +372,78 @@ Ver [mcp-server/QUICKSTART.md](mcp-server/QUICKSTART.md) para guia completo.
 
 ## 📡 API Endpoints
 
-### POST /api/telemetry
-Recebe telemetria do gateway ESP32 via MQTT/HTTP.
-
-**Formato Simplificado - Envio Individual:**
-
-```json
-{
-  "mac": "dc:06:75:67:6a:cc",
-  "type": "distance_cm",
-  "value": 24480,
-  "battery": 5000,
-  "uptime": 3600,
-  "rssi": -50
-}
+### Telemetria
+```bash
+# Receber dados do ESP32
+POST /api/telemetry
+POST /api/manual-reading
+POST /api/calibration
 ```
 
-**Campos:**
-- `mac`: MAC address do node (identificação única)
-- `type`: tipo de dado (`distance_cm`, `sound_in`, `valve_in`, `valve_out`)
-- `value`: valor como inteiro (distance_cm multiplicado por 100, estados 0/1)
-- `battery`: tensão em mV (fonte DC 5V = 5000mV)
-- `uptime`: segundos desde boot
-- `rssi`: força do sinal em dBm
-- `datetime`: adicionado pelo servidor ao receber
+### Leituras
+```bash
+# Consultar leituras
+GET /api/readings/latest
+GET /api/readings/daily-summary
+GET /api/readings/history/:sensor_id
+GET /api/readings/export?format=csv
+```
 
-**Conversão no Backend:**
+### Sensores
+```bash
+# Gerenciar sensores
+GET /api/sensors
+GET /api/sensors/status
+GET /api/sensors/:sensor_id
+PUT /api/sensors/:sensor_id
+```
+
+### Alertas
+```bash
+# Sistema de alertas
+GET /api/alerts?status=active&level=critical
+GET /api/alerts/summary
+POST /api/alerts
+PUT /api/alerts/:alert_id/resolve
+GET /api/alerts/export?format=csv
+```
+
+### Estatísticas
+```bash
+# Análises e estatísticas
+GET /api/stats/daily?date=2025-11-18
+GET /api/stats/consumption?period=7d&group_by=day
+GET /api/stats/sensors
+GET /api/stats/events
+```
+
+### Sistema
+```bash
+# Monitoramento do sistema
+GET /api/system/health
+GET /api/system/logs
+GET /api/system/metrics
+POST /api/system/restart
+```
+
+### WebSocket
 ```javascript
-// distance_cm: int → float
-const distance_cm = value / 100.0;  // 24480 → 244.8 cm
+// Conectar ao WebSocket
+const ws = new WebSocket('ws://192.168.0.100:3000/ws');
 
-// Estados: int → boolean
-const sound_in = value === 1;  // 0 ou 1
-const valve_in = value === 1;
+// Receber eventos em tempo real
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  
+  if (data.type === 'reading') {
+    // Nova leitura recebida
+    console.log('Nova leitura:', data.data);
+  } else if (data.type === 'alert') {
+    // Novo alerta
+    console.log('Alerta:', data.data);
+  }
+};
 ```
-
-### 📊 Detector de Som - Água Entrando
-
-**Funcionalidade:** Detecta ruído de água caindo/entrando no reservatório (abastecimento)
-
-**Benefícios:**
-1. **Detecção de abastecimento** - Som de água entrando confirma que está enchendo
-2. **Validação cruzada** - Confirma aumento de nível é abastecimento real
-3. **Timestamp preciso** - Marca exato momento que água começa a entrar
-4. **Complementa nível** - Detecta início antes do nível subir significativamente
-5. **Alarme antecipado** - Identifica abastecimento não programado
-
-**Implementação:**
-- GPIO 5 (modo digital INPUT)
-- GPIO 21 para IE02 (dual sensor)
-- Enviado como `type: "sound_detected", value: 0/1`
-- Mudança de estado gera transmissão imediata
-
-### POST /api/manual-reading
-Registra leitura manual.
-
-### POST /api/calibration
-Registra calibração de sensor.
 
 ## 🧪 Testes
 

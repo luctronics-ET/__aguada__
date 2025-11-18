@@ -1,6 +1,11 @@
 import express from 'express';
 import telemetryController from '../controllers/telemetry.controller.js';
 import readingController from '../controllers/reading.controller.js';
+import sensorsController from '../controllers/sensors.controller.js';
+import alertsController from '../controllers/alerts.controller.js';
+import statsController from '../controllers/stats.controller.js';
+import systemController from '../controllers/system.controller.js';
+import exportService from '../services/export.service.js';
 
 const router = express.Router();
 
@@ -49,10 +54,128 @@ router.get('/readings/daily-summary', readingController.getDailySummary);
 router.get('/readings/history/:sensor_id', readingController.getReadingHistory);
 
 /**
+ * GET /api/readings/export
+ * Export readings to CSV
+ */
+router.get('/readings/export', exportService.exportReadings);
+
+// ============================================================================
+// SENSORS
+// ============================================================================
+
+/**
+ * GET /api/sensors
+ * Get all sensors
+ */
+router.get('/sensors', sensorsController.getAllSensors);
+
+/**
  * GET /api/sensors/status
  * Status de todos os sensores (online/offline)
  */
-router.get('/sensors/status', readingController.getSensorsStatus);
+router.get('/sensors/status', sensorsController.getSensorsStatus);
+
+/**
+ * GET /api/sensors/:sensor_id
+ * Get sensor by ID
+ */
+router.get('/sensors/:sensor_id', sensorsController.getSensorById);
+
+/**
+ * PUT /api/sensors/:sensor_id
+ * Update sensor configuration
+ */
+router.put('/sensors/:sensor_id', sensorsController.updateSensor);
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+/**
+ * GET /api/alerts
+ * Get all alerts with filters
+ */
+router.get('/alerts', alertsController.getAlerts);
+
+/**
+ * GET /api/alerts/summary
+ * Get alerts summary
+ */
+router.get('/alerts/summary', alertsController.getAlertsSummary);
+
+/**
+ * POST /api/alerts
+ * Create new alert
+ */
+router.post('/alerts', alertsController.createAlert);
+
+/**
+ * PUT /api/alerts/:alert_id/resolve
+ * Mark alert as resolved
+ */
+router.put('/alerts/:alert_id/resolve', alertsController.resolveAlert);
+
+/**
+ * GET /api/alerts/export
+ * Export alerts to CSV
+ */
+router.get('/alerts/export', exportService.exportAlerts);
+
+// ============================================================================
+// STATISTICS
+// ============================================================================
+
+/**
+ * GET /api/stats/daily
+ * Get daily statistics
+ */
+router.get('/stats/daily', statsController.getDailyStats);
+
+/**
+ * GET /api/stats/consumption
+ * Get consumption statistics
+ */
+router.get('/stats/consumption', statsController.getConsumptionStats);
+
+/**
+ * GET /api/stats/sensors
+ * Get sensors statistics
+ */
+router.get('/stats/sensors', statsController.getSensorsStats);
+
+/**
+ * GET /api/stats/events
+ * Get events statistics
+ */
+router.get('/stats/events', statsController.getEventsStats);
+
+// ============================================================================
+// SYSTEM
+// ============================================================================
+
+/**
+ * GET /api/system/health
+ * System health check
+ */
+router.get('/system/health', systemController.getSystemHealth);
+
+/**
+ * GET /api/system/logs
+ * Get system logs
+ */
+router.get('/system/logs', systemController.getSystemLogs);
+
+/**
+ * GET /api/system/metrics
+ * Get system performance metrics
+ */
+router.get('/system/metrics', systemController.getSystemMetrics);
+
+/**
+ * POST /api/system/restart
+ * Restart system (admin only)
+ */
+router.post('/system/restart', systemController.restartSystem);
 
 // ============================================================================
 // HEALTH
