@@ -7,7 +7,16 @@
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
-CREATE EXTENSION IF NOT EXISTS postgis;  -- Opcional para coordenadas geográficas
+-- Tentar criar extensão postgis apenas se estiver disponível no sistema
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
+    CREATE EXTENSION IF NOT EXISTS postgis;
+  ELSE
+    RAISE NOTICE 'postgis extension not available on this server — skipping';
+  END IF;
+END
+$$;
 
 -- =============================================================================
 -- 2. SCHEMA E USUÁRIOS

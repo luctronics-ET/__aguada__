@@ -1,8 +1,0 @@
-Install the SDK — Quick npm install to get started
-Check availability — Detect if Assistant is available
-Programmatically trigger — Open with custom prompts and context
-Use React hooks — useAssistant() hook for React
-Add buttons — Pre-built UI components
-Generate inline content — Fill forms with AI streaming
-Register custom components — Build rich UI elements for AI
-Provide page context — URL-based automatic context

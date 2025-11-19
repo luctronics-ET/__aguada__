@@ -347,6 +347,10 @@ Se preferir usar Docker:
 
 ```yaml
 # docker-compose.yml
+# Note: this project uses non-default host ports to avoid conflicts with services
+# that may already run on the host. Final host port mappings used in this
+# workspace (local dev) are documented below.
+
 version: '3.8'
 
 services:
@@ -396,6 +400,18 @@ services:
 volumes:
   pgdata:
   grafana-data:
+
+--
+
+**Port mappings used in this setup (host → container):**
+
+- `postgres`: `5433:5432` (host 5433) — avoids conflict with host Postgres
+- `redis`: `6379:6379` (host 6379)
+- `mosquitto`: `1884:1883` and `9002:9001` (hosts 1884, 9002)
+- `backend`: `3002:3000` (host 3002)
+- `grafana`: `3001:3000` (host 3001)
+
+If you want the original/default ports, edit `docker/docker-compose.yml` accordingly, but ensure no host services already bind those ports.
 ```
 
 Iniciar tudo:
