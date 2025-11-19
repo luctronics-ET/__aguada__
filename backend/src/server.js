@@ -96,6 +96,7 @@ app.use((err, req, res, next) => {
 
 import http from 'http';
 import { initWebSocket } from './websocket/wsHandler.js';
+import SerialBridge from './services/serial-bridge.js';
 
 async function startServer() {
   try {
@@ -114,12 +115,24 @@ async function startServer() {
     // Initialize WebSocket
     initWebSocket(server);
     
+    // Initialize Serial Bridge (Gateway USB)
+    const serialBridge = new SerialBridge({
+      portPath: process.env.SERIAL_PORT || '/dev/ttyACM0',
+      baudRate: parseInt(process.env.SERIAL_BAUD || '115200'),
+      backendUrl: `http://localhost:${PORT}/api/telemetry`,
+      autoReconnect: true,
+    });
+    
+    serialBridge.connect();
+    serialBridge.startStatusLogger(60000); // Log status a cada 1 min
+    
     // Start HTTP server
     server.listen(PORT, () => {
       logger.info(`🚀 Servidor rodando na porta ${PORT}`);
       logger.info(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 API: http://localhost:${PORT}/api`);
       logger.info(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
+      logger.info(`📡 Serial Bridge: ${serialBridge.portPath} @ ${serialBridge.baudRate} baud`);
     });
     
   } catch (error) {

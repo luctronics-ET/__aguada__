@@ -1,40 +1,46 @@
 /**
  * AGUADA Frontend - Shared JavaScript
+ * Integrado com API real via api-service.js
  */
 
 // Configuration
-const API_BASE = 'http://192.168.0.100:3000/api';
 const POLL_INTERVAL = 10000; // 10 seconds
+const WS_ENABLED = true; // Enable WebSocket for real-time updates
 
-// Sensor configuration
+// Sensor configuration (mapped from backend)
 const SENSORS = {
     'RCON': { 
-        mac: '20:6E:F1:6B:77:58', 
-        name: 'Reservatório RCON', 
+        sensor_id: 'SEN_CON_01',
+        mac: '20:6e:f1:6b:77:58', 
+        name: 'Castelo de Consumo (RCON)', 
         height: 400,
         color: 'rcon'
     },
     'RCAV': { 
-        mac: 'DC:06:75:67:6A:CC', 
-        name: 'Reservatório RCAV', 
+        sensor_id: 'SEN_CAV_01',
+        mac: 'dc:06:75:67:6a:cc', 
+        name: 'Castelo de Incêndio (RCAV)', 
         height: 350,
         color: 'rcav'
     },
     'RB03': { 
-        mac: 'XX:XX:XX:XX:XX:XX', 
-        name: 'Reservatório RB03', 
+        sensor_id: 'SEN_B03_01',
+        mac: null, 
+        name: 'Casa de Bombas RB03', 
         height: 300,
         color: 'rb03'
     },
     'IE01': { 
-        mac: 'XX:XX:XX:XX:XX:XX', 
-        name: 'Elemento IE01', 
+        sensor_id: 'SEN_IE01_01',
+        mac: null, 
+        name: 'Cisterna IE01', 
         height: 250,
         color: 'ie01'
     },
     'IE02': { 
-        mac: 'XX:XX:XX:XX:XX:XX', 
-        name: 'Elemento IE02', 
+        sensor_id: 'SEN_IE02_01',
+        mac: null, 
+        name: 'Cisterna IE02', 
         height: 250,
         color: 'ie02'
     },
@@ -48,6 +54,10 @@ let latestReadings = {
     'IE01': { distance_cm: 0, valve_in: 0, valve_out: 0, sound_in: 0, timestamp: null, battery: 0, rssi: 0 },
     'IE02': { distance_cm: 0, valve_in: 0, valve_out: 0, sound_in: 0, timestamp: null, battery: 0, rssi: 0 },
 };
+
+// Exportar para window para acesso global
+window.latestReadings = latestReadings;
+window.SENSORS = SENSORS;
 
 let allReadings = [];
 let alerts = [];
@@ -92,53 +102,73 @@ function formatDateTime(date) {
 }
 
 /**
- * Poll for new data
+ * Fetch latest readings from API
  */
 async function fetchLatestReadings() {
     try {
-        // In production, fetch from API:
-        // const response = await fetch(`${API_BASE}/readings/latest`);
-        // const data = await response.json();
+        console.log('[App] Buscando leituras da API...');
+        
+        if (!window.apiService) {
+            console.error('[App] API Service não carregado');
+            return null;
+        }
 
-        // For demo, simulate random data
-        Object.keys(SENSORS).forEach(sensorId => {
-            latestReadings[sensorId] = {
-                distance_cm: Math.floor(Math.random() * 40000) + 10000,
-                valve_in: Math.random() > 0.5 ? 1 : 0,
-                valve_out: Math.random() > 0.5 ? 1 : 0,
-                sound_in: Math.random() > 0.7 ? 1 : 0,
-                battery: 4800 + Math.floor(Math.random() * 400),
-                rssi: -50 - Math.floor(Math.random() * 30),
-                timestamp: new Date().toISOString(),
-            };
-        });
-
-        return latestReadings;
+        const readings = await window.apiService.getLatestReadings();
+        console.log('[App] Leituras recebidas:', readings);
+        
+        if (readings) {
+            // Atualizar state global
+            Object.assign(latestReadings, readings);
+            Object.assign(window.latestReadings, readings);
+            
+            // Disparar evento customizado
+            window.dispatchEvent(new CustomEvent('readings-updated', { detail: readings }));
+            
+            return readings;
+        }
+        
+        return null;
     } catch (error) {
-        console.error('Erro ao buscar leituras:', error);
+        console.error('[App] Erro ao buscar leituras:', error);
         return null;
     }
 }
 
 /**
- * Simulate reading history for demo
+ * Fetch reading history from API
+ */
+async function fetchHistoryData(elementoId, days = 7, variavel = null) {
+    try {
+        if (!window.apiService) {
+            console.error('[App] API Service não carregado');
+            return [];
+        }
+
+        const sensor = SENSORS[elementoId];
+        if (!sensor) {
+            console.error(`[App] Sensor não encontrado: ${elementoId}`);
+            return [];
+        }
+
+        const history = await window.apiService.getReadingHistory(
+            sensor.sensor_id,
+            days,
+            variavel
+        );
+        
+        return history;
+    } catch (error) {
+        console.error(`[App] Erro ao buscar histórico de ${elementoId}:`, error);
+        return [];
+    }
+}
+
+/**
+ * Legacy function for compatibility (deprecated)
  */
 function generateHistoryData(sensorId, days = 7) {
-    const readings = [];
-    const now = new Date();
-    
-    for (let i = days * 24; i >= 0; i--) {
-        const timestamp = new Date(now - i * 60 * 60 * 1000);
-        readings.push({
-            timestamp: timestamp.toISOString(),
-            distance_cm: Math.floor(Math.random() * 40000) + 10000 + Math.sin(i / 24) * 5000,
-            valve_in: Math.random() > 0.7 ? 1 : 0,
-            valve_out: Math.random() > 0.7 ? 1 : 0,
-            sound_in: Math.random() > 0.8 ? 1 : 0,
-        });
-    }
-    
-    return readings;
+    console.warn('[App] generateHistoryData é deprecated, use fetchHistoryData');
+    return fetchHistoryData(sensorId, days);
 }
 
 /**
@@ -232,5 +262,96 @@ function initializeUI() {
     }
 }
 
+/**
+ * Initialize WebSocket connection
+ */
+function initializeWebSocket() {
+    if (!WS_ENABLED || !window.apiService) return;
+
+    window.apiService.connectWebSocket((message) => {
+        console.log('[WS] Mensagem recebida:', message);
+        
+        // Atualizar leituras em tempo real
+        if (message.type === 'telemetry' && message.data) {
+            const { elemento_id, variavel, valor } = message.data;
+            
+            if (latestReadings[elemento_id]) {
+                latestReadings[elemento_id][variavel] = valor;
+                latestReadings[elemento_id].timestamp = new Date().toISOString();
+                
+                // Disparar evento
+                window.dispatchEvent(new CustomEvent('reading-updated', { 
+                    detail: { elemento_id, variavel, valor } 
+                }));
+            }
+        }
+    });
+}
+
+/**
+ * Check system health
+ */
+async function checkSystemHealth() {
+    if (!window.apiService) return false;
+    
+    try {
+        const isOnline = await window.apiService.isOnline();
+        
+        // Atualizar badge de status
+        const statusBadges = document.querySelectorAll('.status-badge');
+        statusBadges.forEach(badge => {
+            if (badge.textContent.includes('Online') || badge.textContent.includes('Offline')) {
+                badge.className = isOnline ? 'status-badge status-online pulsing' : 'status-badge status-offline';
+                badge.textContent = isOnline ? '● Online' : '● Offline';
+            }
+        });
+        
+        return isOnline;
+    } catch (error) {
+        console.error('[App] Erro ao verificar saúde do sistema:', error);
+        return false;
+    }
+}
+
+/**
+ * Initialize application
+ */
+async function initializeApp() {
+    console.log('[App] Inicializando aplicação AGUADA...');
+    
+    // Check if API service is loaded
+    if (!window.apiService) {
+        console.error('[App] API Service não encontrado! Certifique-se de carregar api-service.js');
+        return;
+    }
+    
+    // Initialize UI
+    initializeUI();
+    
+    // Check system health
+    const isOnline = await checkSystemHealth();
+    console.log(`[App] Sistema: ${isOnline ? 'Online' : 'Offline'}`);
+    
+    // Connect WebSocket if enabled
+    if (WS_ENABLED && isOnline) {
+        initializeWebSocket();
+    }
+    
+    // Initial data fetch
+    await fetchLatestReadings();
+    
+    console.log('[App] Aplicação inicializada com sucesso');
+}
+
 // Auto-initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', initializeUI);
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('[App] DOM carregado, iniciando app...');
+    initializeApp();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (window.apiService) {
+        window.apiService.disconnectWebSocket();
+    }
+});

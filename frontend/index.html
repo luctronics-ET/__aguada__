@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AGUADA Dashboard - Monitoramento Hidráulico</title>
     <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/loading-states.css">
 </head>
 <body>
     <div class="container">
@@ -55,18 +56,76 @@
         </div>
     </div>
 
+    <script src="assets/api-service.js"></script>
+    <script src="assets/ui-utils.js"></script>
     <script src="assets/app.js"></script>
     <script>
         // Initialize dashboard
-        function init() {
-            renderDashboard();
-            pollData();
-            setInterval(pollData, POLL_INTERVAL);
+        async function init() {
+            console.log('[Dashboard] Iniciando...');
+            const dashboard = document.getElementById('dashboardGrid');
+            
+            try {
+                // Aguardar app.js carregar (até 5 segundos)
+                let attempts = 0;
+                while (!window.apiService && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (!window.apiService) {
+                    throw new Error('API Service não carregou');
+                }
+                
+                console.log('[Dashboard] API Service pronto');
+                
+                // Buscar dados
+                await pollData();
+                
+                // Renderizar
+                renderDashboard();
+                updateStats();
+
+                // Polling periódico
+                setInterval(async () => {
+                    await pollData();
+                    renderDashboard();
+                    updateStats();
+                }, POLL_INTERVAL);
+
+                // Listener para atualizações em tempo real
+                window.addEventListener('readings-updated', () => {
+                    renderDashboard();
+                    updateStats();
+                });
+
+                console.log('[Dashboard] Inicializado com sucesso!');
+            } catch (error) {
+                console.error('[Dashboard] Erro:', error);
+                dashboard.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                        <h2 style="color: #ef4444;">❌ Erro ao carregar dados</h2>
+                        <p style="color: #999;">${error.message}</p>
+                        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px;">
+                            Recarregar
+                        </button>
+                    </div>
+                `;
+            }
         }
 
         // Render dashboard cards
         function renderDashboard() {
             const dashboard = document.getElementById('dashboardGrid');
+            
+            if (!window.latestReadings) {
+                console.warn('[Dashboard] latestReadings não disponível');
+                dashboard.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 40px;">⏳ Aguardando dados...</div>';
+                return;
+            }
+            
+            console.log('[Dashboard] Renderizando com dados:', window.latestReadings);
+
             dashboard.innerHTML = Object.entries(SENSORS).map(([id, sensor]) => {
                 const reading = latestReadings[id] || {
                     distance_cm: 0,
@@ -79,13 +138,14 @@
                 };
                 
                 const volumePercent = getVolumePercent(id, reading.distance_cm);
+                const isOnline = reading.timestamp && (new Date() - new Date(reading.timestamp)) < 5 * 60 * 1000; // 5 min
 
                 return `
                     <div class="card">
                         <div class="card-header ${id.toLowerCase()}">
                             <span>${sensor.name}</span>
-                            <span class="status-badge ${reading.timestamp ? 'status-online' : 'status-offline'}">
-                                ${reading.timestamp ? '● Online' : '● Offline'}
+                            <span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">
+                                ${isOnline ? '● Online' : '● Offline'}
                             </span>
                         </div>
                         <div class="card-body">
@@ -151,13 +211,16 @@
 
         // Poll for new data
         async function pollData() {
-            await fetchLatestReadings();
-            updateStats();
-            renderDashboard();
+            try {
+                await fetchLatestReadings();
+            } catch (error) {
+                console.error('[Dashboard] Erro ao buscar dados:', error);
+            }
         }
 
         // Update statistics footer
         function updateStats() {
+            if (!window.latestReadings) return;
             document.getElementById('totalSensors').textContent = Object.keys(SENSORS).length;
             document.getElementById('lastSync').textContent = formatDateTime(new Date());
             

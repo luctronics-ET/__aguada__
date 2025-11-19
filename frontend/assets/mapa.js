@@ -131,26 +131,33 @@
   }
 
   async function fetchHistory(elementoId, limit = 20) {
-    const endpoints = [
-      `/api/telemetry/history?elemento_id=${encodeURIComponent(elementoId)}&limit=${limit}`,
-      `/api/telemetry/latest?elemento_id=${encodeURIComponent(elementoId)}&limit=${limit}`,
-    ];
-    for (const url of endpoints) {
-      try {
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) throw new Error('erro');
-        const payload = await response.json();
-        if (Array.isArray(payload)) {
-          return payload.map((item) => Number(item.value ?? item.valor ?? item.v ?? 0));
+    try {
+      // Usar API Service se disponível
+      if (window.apiService && window.SENSORS && window.SENSORS[elementoId]) {
+        const sensor = window.SENSORS[elementoId];
+        const history = await window.apiService.getReadingHistory(
+          sensor.sensor_id,
+          1, // 1 dia (últimas 24h)
+          'distance_cm'
+        );
+        
+        if (history && history.length > 0) {
+          // Converter para formato de valores (últimos N registros)
+          return history
+            .slice(-limit)
+            .map(item => {
+              const value = Number(item.valor || item.value || 0);
+              // Converter de cm x100 para cm
+              return value / 100;
+            });
         }
-        if (payload.data) {
-          return payload.data.map((item) => Number(item.value ?? item.valor ?? 0));
-        }
-      } catch (error) {
-        // tenta próximo endpoint
       }
+    } catch (error) {
+      console.warn(`[Mapa] Erro ao buscar histórico de ${elementoId}:`, error);
     }
 
+    // Fallback: dados simulados
+    console.log(`[Mapa] Usando dados simulados para ${elementoId}`);
     const result = [];
     for (let i = 0; i < limit; i += 1) {
       result.push(
