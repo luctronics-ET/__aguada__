@@ -1,5 +1,7 @@
 import { Card, CardContent, Typography, Box, Chip, LinearProgress } from '@mui/material';
-import { Water, WaterDrop, PowerSettingsNew, VolumeUp } from '@mui/icons-material';
+import WaterIcon from '@mui/icons-material/Water';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import type { TelemetryReading } from '../../types/telemetry.types';
 import type { Reservoir } from '../../types/reservoir.types';
 import { calculateVolume, calculatePercentage, getLevelColor } from '../../utils/calculations';
@@ -44,76 +46,76 @@ export default function ReservoirCard({ reservoir, readings }: ReservoirCardProp
         borderColor: `${levelColor}.main`,
       }}
     >
-      <CardContent>
-        {/* Cabeçalho */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h6" component="div" gutterBottom>
-            <Water sx={{ mr: 1, verticalAlign: 'middle' }} />
-            {reservoir.name}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {reservoir.id}
-          </Typography>
-        </Box>
+        <CardContent>
+          {/* Cabeçalho */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" component="div" gutterBottom>
+              <WaterIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+              {reservoir.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {reservoir.id}
+            </Typography>
+          </Box>
 
-        {/* Gauge de nível */}
-        <Box sx={{ textAlign: 'center', mb: 2 }}>
-          <Typography variant="h3" color={`${levelColor}.main`} sx={{ fontWeight: 'bold' }}>
-            {formatPercent(percentage)}
-          </Typography>
-          <LinearProgress 
-            variant="determinate" 
-            value={percentage} 
-            color={levelColor}
-            sx={{ height: 10, borderRadius: 5, mt: 1 }}
-          />
-        </Box>
+          {/* Gauge de nível */}
+          <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <Typography variant="h3" color={`${levelColor}.main`} sx={{ fontWeight: 'bold' }}>
+              {formatPercent(percentage)}
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={percentage} 
+              color={levelColor}
+              sx={{ height: 10, borderRadius: 5, mt: 1 }}
+            />
+          </Box>
 
-        {/* Volume */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            Volume Atual
-          </Typography>
-          <Typography variant="h6">
-            {volume_m3.toFixed(1)} m³
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatLiters(volume_liters)}
-          </Typography>
-        </Box>
+          {/* Volume */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Volume Atual
+            </Typography>
+            <Typography variant="h6">
+              {volume_m3.toFixed(1)} m³
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formatLiters(volume_liters)}
+            </Typography>
+          </Box>
 
-        {/* Estados */}
-        <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Chip 
-            label={`Entrada ${valve_in_open ? 'Aberta' : 'Fechada'}`}
-            color={valve_in_open ? 'success' : 'default'}
-            size="small"
-            icon={<PowerSettingsNew />}
-          />
-          <Chip 
-            label={`Saída ${valve_out_open ? 'Aberta' : 'Fechada'}`}
-            color={valve_out_open ? 'success' : 'default'}
-            size="small"
-            icon={<PowerSettingsNew />}
-          />
-          <Chip 
-            label={sound_detected ? 'Som Detectado' : 'Sem Som'}
-            color={sound_detected ? 'info' : 'default'}
-            size="small"
-            icon={<VolumeUp />}
-          />
-        </Box>
+          {/* Estados */}
+          <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip 
+              label={`Entrada ${valve_in_open ? 'Aberta' : 'Fechada'}`}
+              color={valve_in_open ? 'success' : 'default'}
+              size="small"
+              icon={<PowerSettingsNewIcon />}
+            />
+            <Chip 
+              label={`Saída ${valve_out_open ? 'Aberta' : 'Fechada'}`}
+              color={valve_out_open ? 'success' : 'default'}
+              size="small"
+              icon={<PowerSettingsNewIcon />}
+            />
+            <Chip 
+              label={sound_detected ? 'Som Detectado' : 'Sem Som'}
+              color={sound_detected ? 'info' : 'default'}
+              size="small"
+              icon={<VolumeUpIcon />}
+            />
+          </Box>
 
-        {/* Metadados */}
-        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="caption" display="block" color="text.secondary">
-            {formatRSSI(rssi)} • {formatBattery(battery)}
-          </Typography>
-          <Typography variant="caption" display="block" color="text.secondary">
-            Atualizado {formatRelativeTime(lastUpdate)}
-          </Typography>
-        </Box>
-      </CardContent>
+          {/* Metadados */}
+          <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="caption" display="block" color="text.secondary">
+              {formatRSSI(rssi)} • {formatBattery(battery)}
+            </Typography>
+            <Typography variant="caption" display="block" color="text.secondary">
+              Atualizado {formatRelativeTime(lastUpdate)}
+            </Typography>
+          </Box>
+        </CardContent>
     </Card>
   );
 }
