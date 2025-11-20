@@ -79,6 +79,22 @@ aguada/
 │       ├── sdkconfig.defaults
 │       └── README.md
 │
+│   ├── node_sensor_10/            # Node sensor único (RCON, RCAV, RB03)
+│       ├── main/
+│       │   ├── main.c             # Firmware TYPE_SINGLE_ULTRA
+│       │   └── config.h           # GPIOs: TRIG=1, ECHO=0, etc
+│       ├── CMakeLists.txt
+│       ├── sdkconfig.defaults
+│       └── README.md
+│
+│   └── node_sensor_20/            # Node sensor duplo (IE01 + IE02) ✨ NOVO
+│       ├── main/
+│       │   ├── main.c             # Firmware TYPE_DUAL_ULTRA
+│       │   └── config.h           # 2 ultrassom, 4 válvulas, 2 som
+│       ├── CMakeLists.txt
+│       ├── sdkconfig.defaults
+│       └── README.md
+│
 ├── 📁 backend/                     # Backend Node.js
 │   ├── src/
 │   │   ├── config/               # Database, Redis, Logger
@@ -323,15 +339,18 @@ Ver [mcp-server/QUICKSTART.md](mcp-server/QUICKSTART.md) para guia completo.
 
 ### Reservatórios Monitorados (5 Total)
 
-| ID | Nome | Alias | Tipo | Volume | Sensor | Node | Local | Hardware |
-|----|------|-------|------|--------|--------|------|-------|----------|
-| RCON | Castelo Consumo | CON | Cilíndrico | 80m³ | SEN_CON_01 | ESP32 #1 | Cobertura A | Ultra, 2 Válvulas, Som |
-| RCAV | Castelo Incêndio | CAV | Cilíndrico | 80m³ | SEN_CAV_01 | ESP32 #2 | Cobertura B | Ultra, 2 Válvulas, Som |
-| RB03 | Reservatório B03 | B03 | Cilíndrico | 80m³ | SEN_B03_01 | ESP32 #3 | Casa Bombas | Ultra, 2 Válvulas, Som |
-| IE01 | Cisterna IE 01 | IE01 | Retangular | 254m³ | SEN_IE01_01 | ESP32 #4 | Subsolo | Ultra, 2 Válvulas, Som |
-| IE02 | Cisterna IE 02 | IE02 | Retangular | 254m³ | SEN_IE02_01 | ESP32 #5 | Subsolo | Ultra, 2 Válvulas, Som |
+| ID | Nome | Alias | Tipo | Volume | Sensor | Node | Firmware | Local | Hardware |
+|----|------|-------|------|--------|--------|------|----------|-------|----------|
+| RCON | Castelo Consumo | CON | Cilíndrico | 80m³ | SEN_CON_01 | ESP32 #1 | node_sensor_10 | Cobertura A | 1 Ultra, 2 Válvulas, Som |
+| RCAV | Castelo Incêndio | CAV | Cilíndrico | 80m³ | SEN_CAV_01 | ESP32 #2 | node_sensor_10 | Cobertura B | 1 Ultra, 2 Válvulas, Som |
+| RB03 | Reservatório B03 | B03 | Cilíndrico | 80m³ | SEN_B03_01 | ESP32 #3 | node_sensor_10 | Casa Bombas | 1 Ultra, 2 Válvulas, Som |
+| IE01 | Cisterna IE 01 | IE01 | Retangular | 254m³ | SEN_IE01_01 | **ESP32 #4** | **node_sensor_20** | Subsolo | **2 Ultra, 4 Válvulas, 2 Som** |
+| IE02 | Cisterna IE 02 | IE02 | Retangular | 254m³ | SEN_IE02_01 | **ESP32 #4** | **node_sensor_20** | Subsolo | **2 Ultra, 4 Válvulas, 2 Som** |
 
-**Nota:** Todos os 5 nodes usam **firmware idêntico** (TYPE_SINGLE_ULTRA). Cada reservatório tem seu próprio ESP32-C3.
+**Notas:**
+- **RCON, RCAV, RB03**: Firmware `node_sensor_10` (TYPE_SINGLE_ULTRA) - 1 reservatório por ESP32
+- **IE01 + IE02**: Firmware `node_sensor_20` (TYPE_DUAL_ULTRA) - **2 reservatórios em 1 ESP32** ✨
+- **Total de ESP32-C3**: 4 microcontroladores (ao invés de 5)
 
 ### Casa de Bombas N03 (CB03)
 
@@ -342,19 +361,29 @@ Ver [mcp-server/QUICKSTART.md](mcp-server/QUICKSTART.md) para guia completo.
 
 ### Recursos de Hardware por Node
 
-**Todos os 5 Nodes ESP32-C3 são idênticos:**
+#### node_sensor_10 (RCON, RCAV, RB03) - TYPE_SINGLE_ULTRA
+
+**3 ESP32-C3 com firmware idêntico:**
+
 - ✅ **1 sensor ultrassônico** AJ-SR04M (distance_cm)
 - ✅ **2 válvulas** digitais GPIO (valve_in, valve_out)
-- ✅ **1 detector de som** GPIO (sound_in - detecta água entrando)
+- ✅ **1 detector de som** GPIO (sound_in)
 - ✅ **RSSI** - força do sinal ESP-NOW
 - ✅ **Battery** - fonte DC 5V (5000mV)
 - ✅ **Uptime** - contador desde boot
 
-**Firmware Único:**
-- Mesmo binário em todos os 5 ESP32-C3
-- Diferenciação via **MAC address** (hardware)
-- Backend resolve mapeamento MAC → reservatório
-- GPIOs fixos definidos em `config_pins.h`
+**Firmware:** Mesmo binário nos 3 ESP32, diferenciação via MAC address
+
+#### node_sensor_20 (IE01 + IE02) - TYPE_DUAL_ULTRA
+
+**1 ESP32-C3 monitora 2 reservatórios simultaneamente:**
+
+- ✅ **2 sensores ultrassônicos** AJ-SR04M (IE01_distance_cm, IE02_distance_cm)
+- ✅ **4 válvulas** digitais GPIO (IE01_valve_in/out, IE02_valve_in/out)
+- ✅ **2 detectores de som** GPIO (IE01_sound_in, IE02_sound_in)
+- ✅ **RSSI, Battery, Uptime** - compartilhados entre os 2 reservatórios
+
+**Firmware:** Específico para dual, envia 8 variáveis (4 por reservatório)
 
 ### Dados Enviados (Individual)
 

@@ -58,17 +58,19 @@ AGUADA é um sistema supervisório IoT para monitoramento e gestão de redes hí
 - **Node**: ESP32-C3 single sensor
 - **Abastece**: RCON (consumo) ou RCAV (incêndio)
 
-#### IE01 e IE02 - Cisternas
+#### IE01 e IE02 - Cisternas Ilha do Engenho
 - **ID**: IE01, IE02
 - **Capacidade**: 254 m³ cada (254.124 m³ calculado)
-- **Altura útil**: 240 cm
-- **Comprimento**: 585 cm
-- **Largura**: 1810 cm
+- **Altura útil**: 600 cm (útil: 240cm)
+- **Comprimento**: 1040 cm
+- **Largura**: 407 cm
 - **Sensor offset**: 20 cm (hsensor)
 - **Tipo**: Retangular (paralelepípedo)
-- **Válvulas**: saída CON, saída CAV, entrada IF
-- **Node**: 1 único ESP32-C3 com 2 sensores ultrassônicos
+- **Válvulas**: saída para RB03, entrada IF (Ilha da Fazenda)
+- **Node**: **1 único ESP32-C3 com 2 sensores ultrassônicos** (TYPE_DUAL_ULTRA)
+- **Firmware**: node_sensor_20 (monitora IE01 e IE02 simultaneamente)
 - **Local**: Subsolo
+- **Sensores**: 2 ultrassônicos, 4 válvulas (2 por cisterna), 2 detectores de som
 
 ---
 
@@ -146,12 +148,27 @@ Cada elemento tem coordenadas para visualização em:
 
 **Tipos de Dados Enviados:**
 
+#### TYPE_SINGLE_ULTRA (node_sensor_10: RCON, RCAV, RB03)
+
 | type | value | unit | quando enviar |
 |------|-------|------|---------------|
 | `distance_cm` | int (cm*100) | cm | variação > ±2cm |
 | `sound_in` | 0 ou 1 | boolean | mudança de estado |
 | `valve_in` | 0 ou 1 | boolean | mudança de estado |
 | `valve_out` | 0 ou 1 | boolean | mudança de estado |
+
+#### TYPE_DUAL_ULTRA (node_sensor_20: IE01 + IE02)
+
+| type | value | unit | quando enviar |
+|------|-------|------|---------------|
+| `IE01_distance_cm` | int (cm*100) | cm | variação > ±2cm |
+| `IE02_distance_cm` | int (cm*100) | cm | variação > ±2cm |
+| `IE01_sound_in` | 0 ou 1 | boolean | mudança de estado |
+| `IE02_sound_in` | 0 ou 1 | boolean | mudança de estado |
+| `IE01_valve_in` | 0 ou 1 | boolean | mudança de estado |
+| `IE01_valve_out` | 0 ou 1 | boolean | mudança de estado |
+| `IE02_valve_in` | 0 ou 1 | boolean | mudança de estado |
+| `IE02_valve_out` | 0 ou 1 | boolean | mudança de estado |
 
 **Exemplo de Sequência de Envios:**
 
@@ -167,6 +184,11 @@ Cada elemento tem coordenadas para visualização em:
 ```
 
 **Recursos em Todos os Nodes:**
+
+#### node_sensor_10 (TYPE_SINGLE_ULTRA)
+
+**Firmware**: RCON, RCAV, RB03
+
 - **1 sensor ultrassônico** (distance_cm)
 - **2 válvulas** (valve_in, valve_out) - controle digital
 - **1 detector de som** (sound_in) - detecta água entrando
@@ -174,10 +196,23 @@ Cada elemento tem coordenadas para visualização em:
 - **Battery** - fonte DC 5V (5000mV)
 - **Uptime** - segundos desde boot
 
-**Hardware Idêntico:**
-- Todos os 5 nodes (RCON, RCAV, RB03, IE01, IE02) usam o **mesmo firmware**
-- Diferenciação via MAC address (backend resolve o mapeamento)
-- Não há nodes dual - cada reservatório tem seu próprio ESP32-C3
+**GPIOs**: TRIG=1, ECHO=0, VALVE_IN=2, VALVE_OUT=3, SOUND=5, LED=8
+
+#### node_sensor_20 (TYPE_DUAL_ULTRA)
+
+**Firmware**: IE01 + IE02 (um único ESP32-C3 monitora 2 cisternas)
+
+- **2 sensores ultrassônicos** (IE01_distance_cm, IE02_distance_cm)
+- **4 válvulas** (IE01_valve_in/out, IE02_valve_in/out)
+- **2 detectores de som** (IE01_sound_in, IE02_sound_in)
+- **RSSI, Battery, Uptime** - compartilhados
+
+**GPIOs**:
+- IE01: TRIG=0, ECHO=1, VALVE_IN=7, VALVE_OUT=8, SOUND=5
+- IE02: TRIG=2, ECHO=3, VALVE_IN=9, VALVE_OUT=10, SOUND=6
+- LED=8 (compartilhado)
+
+**Total de ESP32-C3 no sistema**: 4 microcontroladores (3 single + 1 dual)
 
 **Mapeamento no Backend:**
 - MAC address único identifica o node

@@ -1,6 +1,13 @@
 /**
- * AGUADA - Gateway v2.0 (ESP-IDF C)
- * ESP-NOW Receiver → HTTP POST Bridge (with queue-based processing)
+ * AGUADA - Gateway v3.2 (ESP-IDF C)
+ * ESP-NOW Receiver → WiFi HTTP POST Bridge
+ * 
+ * Features:
+ * - Canal fixo 11 (configurado com SSID "luciano")
+ * - Queue-based HTTP POST para backend
+ * - Otimizado para baixo consumo de energia
+ * - Preparado para módulo Ethernet ENC28J60
+ * 
  * ESP32-C3 SuperMini
  */
 
@@ -29,10 +36,11 @@
 // ============================================================================
 
 #define WIFI_SSID "luciano"
-#define WIFI_PASSWORD "Luciano19852012"
-#define BACKEND_URL "http://192.168.0.100:3000/api/telemetry"
+#define WIFI_PASS "Luciano19852012"
+#define BACKEND_URL "http://192.168.0.117:3000/api/telemetry"
+#define ESPNOW_CHANNEL 11  // Fixed channel for SSID "luciano"
 #define LED_BUILTIN GPIO_NUM_8
-#define HEARTBEAT_INTERVAL_MS 1000
+#define HEARTBEAT_INTERVAL_MS 3000
 #define MAX_PAYLOAD_SIZE 256
 
 // ============================================================================
@@ -50,6 +58,7 @@ typedef struct {
 // ============================================================================
 
 static uint8_t gateway_mac[6];
+static bool wifi_connected = false;
 static int64_t last_heartbeat = 0;
 static bool led_state = false;
 static QueueHandle_t espnow_queue = NULL;
@@ -87,10 +96,10 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
 }
 
 // ============================================================================
-// HTTP POST TASK (Process queue)
+// PACKET PROCESSING TASK (Process queue)
 // ============================================================================
 
-static void http_post_task(void *pvParameters) {
+static void packet_processing_task(void *pvParameters) {
     espnow_packet_t packet;
     
     while (1) {
@@ -99,7 +108,7 @@ static void http_post_task(void *pvParameters) {
             char src_mac_str[18];
             mac_to_string(packet.src_addr, src_mac_str);
 
-            // Debug output
+            // Log received packet
             ESP_LOGI(TAG, "");
             ESP_LOGI(TAG, "╔════════════════════════════════════════════════════╗");
             ESP_LOGI(TAG, "║ ✓ ESP-NOW recebido de: %s (%d bytes)", src_mac_str, packet.len);
@@ -107,11 +116,17 @@ static void http_post_task(void *pvParameters) {
             ESP_LOGI(TAG, "║ Dados: %s", packet.payload);
             ESP_LOGI(TAG, "╚════════════════════════════════════════════════════╝");
 
-            // Make HTTP POST request
+            // Skip HTTP POST if WiFi not connected
+            if (!wifi_connected) {
+                ESP_LOGW(TAG, "⚠ WiFi desconectado - Dados não enviados");
+                continue;
+            }
+
+            // Make HTTP POST request (timeout reduced to 3s to avoid blocking)
             esp_http_client_config_t config = {
                 .url = BACKEND_URL,
                 .method = HTTP_METHOD_POST,
-                .timeout_ms = 5000,
+                .timeout_ms = 3000,  // 3 seconds (reduced from 5s)
             };
             
             esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -146,13 +161,16 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "WiFi started, connecting...");
+        wifi_connected = false;
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGW(TAG, "WiFi disconnected, reconnecting...");
+        wifi_connected = false;
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "✓ WiFi connected! IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        wifi_connected = true;
     }
 }
 
@@ -192,19 +210,28 @@ static void wifi_init_sta(void) {
     wifi_config_t wifi_config = {
         .sta = {
             .ssid = WIFI_SSID,
-            .password = WIFI_PASSWORD,
+            .password = WIFI_PASS,
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    
+    // Set WiFi power save mode to reduce heat (MODEM sleep allows ESP-NOW + WiFi)
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
+    
     ESP_ERROR_CHECK(esp_wifi_start());
     
-    // Set channel for ESP-NOW compatibility
-    ESP_ERROR_CHECK(esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE));
+    // Set fixed channel 11 for ESP-NOW (MUST be called AFTER esp_wifi_start())
+    ESP_ERROR_CHECK(esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+    
+    // Reduce WiFi TX power to 15 dBm (60 = 15dBm, default is 80 = 20dBm)
+    // Gateway is close to AP, doesn't need max power
+    // MUST be called AFTER esp_wifi_start()
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(60));
 
-    ESP_LOGI(TAG, "✓ WiFi inicializado (SSID: %s, CH1)", WIFI_SSID);
+    ESP_LOGI(TAG, "✓ WiFi inicializado (SSID: %s, Canal: %d, TX: 15dBm)", WIFI_SSID, ESPNOW_CHANNEL);
 }
 
 // ============================================================================
@@ -230,12 +257,12 @@ static void espnow_init(void) {
 
     // Add broadcast peer (FF:FF:FF:FF:FF:FF)
     esp_now_peer_info_t peer = {0};
-    peer.channel = 1;
+    peer.channel = ESPNOW_CHANNEL;  // Fixed channel 11
     peer.encrypt = false;
     memset(peer.peer_addr, 0xFF, 6);
 
     ESP_ERROR_CHECK(esp_now_add_peer(&peer));
-    ESP_LOGI(TAG, "✓ Peer broadcast adicionado");
+    ESP_LOGI(TAG, "✓ Peer broadcast adicionado (canal %d)", ESPNOW_CHANNEL);
 }
 
 // ============================================================================
@@ -272,11 +299,13 @@ static void gpio_init(void) {
 
 static void heartbeat_task(void *pvParameters) {
     while (1) {
+        // LED heartbeat (blink every 3 seconds)
         if (esp_timer_get_time() - last_heartbeat >= HEARTBEAT_INTERVAL_MS * 1000) {
             last_heartbeat = esp_timer_get_time();
             led_state = !led_state;
             gpio_set_level(LED_BUILTIN, led_state ? 1 : 0);
         }
+        
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -288,8 +317,9 @@ static void heartbeat_task(void *pvParameters) {
 void app_main(void) {
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "╔═══════════════════════════════════════════════════════════╗");
-    ESP_LOGI(TAG, "║           AGUADA Gateway v2.0 (ESP-IDF C)                ║");
-    ESP_LOGI(TAG, "║           ESP-NOW → HTTP Bridge                         ║");
+    ESP_LOGI(TAG, "║       AGUADA Gateway v3.2 (ESP-IDF C)                    ║");
+    ESP_LOGI(TAG, "║       ESP-NOW + WiFi → HTTP Bridge                       ║");
+    ESP_LOGI(TAG, "║       Canal fixo 11 (otimizado para baixo consumo)       ║");
     ESP_LOGI(TAG, "╚═══════════════════════════════════════════════════════════╝");
     ESP_LOGI(TAG, "");
 
@@ -311,19 +341,20 @@ void app_main(void) {
     ESP_LOGI(TAG, "Aguardando conexão WiFi...");
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    // Initialize ESP-NOW
+    // Initialize ESP-NOW (after WiFi is up)
     espnow_init();
 
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "✓ Gateway inicializado e pronto!");
+    ESP_LOGI(TAG, "  - Canal ESP-NOW: %d (fixo)", ESPNOW_CHANNEL);
     ESP_LOGI(TAG, "  - Aguardando dados dos sensores...");
     ESP_LOGI(TAG, "");
 
     // Create heartbeat task
     xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 5, NULL);
 
-    // Create HTTP POST task
-    xTaskCreate(http_post_task, "http_post", 4096, NULL, 5, NULL);
+    // Create packet processing task (HTTP POST)
+    xTaskCreate(packet_processing_task, "packet_proc", 4096, NULL, 5, NULL);
 
     // Keep main task alive
     while (1) {

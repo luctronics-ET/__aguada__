@@ -17,10 +17,14 @@
 #include "driver/gpio.h"
 
 // Identificação (genérica - diferenciação por MAC)
-#define FIRMWARE_VERSION "v1.0.0"
+#define FIRMWARE_VERSION "v1.2.0-fixed-channel"
 
 // Configuração do Gateway (MAC do ESP32-C3 gateway)
 static uint8_t gateway_mac[6] = {0x80, 0xf1, 0xb2, 0x50, 0x2e, 0xc4};
+
+// ========== CANAL FIXO ESP-NOW ==========
+// Canal 11 configurado para SSID "luciano"
+#define ESPNOW_CHANNEL 11
 
 // ========== PINOS GPIO (FIXOS PARA TODOS OS NODES) ==========
 // AJ-SR04M Ultrasonic Sensor
@@ -50,7 +54,6 @@ static uint8_t gateway_mac[6] = {0x80, 0xf1, 0xb2, 0x50, 0x2e, 0xc4};
 #define STABLE_STDDEV 0.5         // Desvio padrão para "estável"
 
 // ========== ESP-NOW ==========
-#define ESPNOW_CHANNEL 1
 #define ESPNOW_QUEUE_SIZE 6
 #define MAX_RETRIES 3
 #define RETRY_DELAY_MS 1000

@@ -25,6 +25,7 @@
 #include "esp_now.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "config.h"
@@ -34,6 +35,7 @@ static const char *TAG = "AGUADA_NODE";
 // ========== VARIÁVEIS GLOBAIS ==========
 static uint8_t node_mac[6];
 static char node_mac_str[18];
+static uint8_t espnow_channel = 0;  // Canal ESP-NOW (0 = não configurado)
 
 // Últimos valores conhecidos
 static int last_distance_cm = -1;  // Multiplicado por 100
@@ -58,7 +60,6 @@ uint8_t read_sound_in(void);
 void telemetry_task(void *pvParameters);
 void heartbeat_task(void *pvParameters);
 void espnow_send_cb(const esp_now_send_info_t *info, esp_now_send_status_t status);
-
 // ========== INICIALIZAÇÃO GPIO ==========
 void init_gpio(void) {
     // Sensor ultrassônico
@@ -92,6 +93,11 @@ void init_gpio(void) {
              TRIG_PIN, ECHO_PIN, VALVE_IN_PIN, VALVE_OUT_PIN, SOUND_IN_PIN);
 }
 
+// ========== NVS - CARREGAR CANAL ==========
+// ========== NVS - SALVAR CANAL ==========
+// ========== ESP-NOW RECEIVE CALLBACK (para ACK) ==========
+// ========== ENVIAR DISCOVERY PACKET ==========
+// ========== AUTO-DISCOVERY DE CANAL ==========
 // ========== LEITURA SENSOR ULTRASSÔNICO ==========
 // Retorna:
 //  > 0: distância válida (cm * 100)
@@ -221,7 +227,6 @@ void init_espnow(void) {
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
     
     // Obter MAC address
     ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_STA, node_mac));
@@ -232,6 +237,11 @@ void init_espnow(void) {
     
     ESP_LOGI(TAG, "Node MAC: %s", node_mac_str);
     
+    // ========== CONFIGURAR CANAL FIXO ==========
+    espnow_channel = ESPNOW_CHANNEL;
+    ESP_ERROR_CHECK(esp_wifi_set_channel(espnow_channel, WIFI_SECOND_CHAN_NONE));
+    ESP_LOGI(TAG, "✓ Canal ESP-NOW: %d (fixo)", espnow_channel);
+    
     // Inicializar ESP-NOW
     ESP_ERROR_CHECK(esp_now_init());
     ESP_ERROR_CHECK(esp_now_register_send_cb(espnow_send_cb));
@@ -239,14 +249,14 @@ void init_espnow(void) {
     // Adicionar gateway como peer
     esp_now_peer_info_t peer_info = {};
     memcpy(peer_info.peer_addr, gateway_mac, 6);
-    peer_info.channel = ESPNOW_CHANNEL;
+    peer_info.channel = espnow_channel;
     peer_info.encrypt = false;
     
     ESP_ERROR_CHECK(esp_now_add_peer(&peer_info));
     
-    ESP_LOGI(TAG, "ESP-NOW OK - Gateway: %02X:%02X:%02X:%02X:%02X:%02X",
+    ESP_LOGI(TAG, "ESP-NOW OK - Gateway: %02X:%02X:%02X:%02X:%02X:%02X (CH%d)",
              gateway_mac[0], gateway_mac[1], gateway_mac[2],
-             gateway_mac[3], gateway_mac[4], gateway_mac[5]);
+             gateway_mac[3], gateway_mac[4], gateway_mac[5], espnow_channel);
 }
 
 // ========== ENVIO INDIVIDUAL DE TELEMETRIA ==========

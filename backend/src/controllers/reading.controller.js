@@ -214,9 +214,74 @@ export async function getSensorsStatus(req, res) {
   }
 }
 
+/**
+ * GET /api/readings/raw
+ * Obter leituras raw com paginação
+ */
+export async function getRawReadings(req, res) {
+  try {
+    const limit = parseInt(req.query.limit) || 500;
+    const offset = parseInt(req.query.offset) || 0;
+    const elemento_id = req.query.elemento_id;
+    const variavel = req.query.variavel;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (elemento_id) {
+      whereClause += ` AND r.elemento_id = $${paramIndex}`;
+      params.push(elemento_id);
+      paramIndex++;
+    }
+
+    if (variavel) {
+      whereClause += ` AND r.variavel = $${paramIndex}`;
+      params.push(variavel);
+      paramIndex++;
+    }
+
+    const query = `
+      SELECT 
+        r.datetime,
+        r.sensor_id,
+        r.elemento_id,
+        r.variavel,
+        r.valor,
+        r.unidade,
+        r.meta,
+        r.fonte
+      FROM leituras_raw r
+      ${whereClause}
+      ORDER BY r.datetime DESC
+      LIMIT $${paramIndex}
+      OFFSET $${paramIndex + 1}
+    `;
+
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      limit,
+      offset,
+      data: result.rows
+    });
+  } catch (error) {
+    logger.error('Erro ao obter leituras raw:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao obter leituras'
+    });
+  }
+}
+
 export default {
   getLatestReadings,
   getDailySummary,
   getReadingHistory,
   getSensorsStatus,
+  getRawReadings,
 };

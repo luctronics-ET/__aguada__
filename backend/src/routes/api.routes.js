@@ -42,6 +42,12 @@ router.post('/calibration', telemetryController.receiveCalibration);
 router.get('/readings/latest', readingController.getLatestReadings);
 
 /**
+ * GET /api/readings/raw
+ * Obter leituras raw com paginação
+ */
+router.get('/readings/raw', readingController.getRawReadings);
+
+/**
  * GET /api/readings/daily-summary
  * Resumo diário (min, max, média)
  */

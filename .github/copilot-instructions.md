@@ -7,7 +7,9 @@
 AGUADA is an IoT hydraulic monitoring system for 5 water reservoirs using ESP32-C3 microcontrollers with ESP-NOW wireless communication. The system monitors water levels, valve states, and consumption patterns across:
 
 - **5 Reservoirs**: RCON, RCAV, RB03, IE01, IE02
-- **ESP32-C3 SuperMini** sensor nodes (AJ-SR04M ultrasonic sensors)
+- **4 ESP32-C3 SuperMini** sensor nodes:
+  - **3x TYPE_SINGLE_ULTRA** (node_sensor_10): RCON, RCAV, RB03 - 1 reservatório por ESP32
+  - **1x TYPE_DUAL_ULTRA** (node_sensor_20): IE01 + IE02 - 2 reservatórios em 1 ESP32
 - **ESP-NOW protocol** for sensor → gateway communication (up to 250m range)
 - **Gateway ESP32-C3** converts ESP-NOW → MQTT/HTTP
 - **Backend**: Node.js/Express → TimescaleDB (PostgreSQL)
@@ -44,34 +46,78 @@ This is the single most important document. It contains:
 
 ## Core Architecture Principles
 
-### Universal Firmware Design
+### Firmware Types
 
-**✅ CORRECT**: One firmware binary for ALL 5 reservoirs
+AGUADA utiliza **2 tipos de firmware** para os nodes ESP32-C3:
+
+#### TYPE_SINGLE_ULTRA (node_sensor_10)
+- **Firmware**: `firmware/node_sensor_10/`
+- **Reservatórios**: RCON, RCAV, RB03
+- **Sensores**: 1 ultrassônico AJ-SR04M por ESP32
+- **GPIOs**: TRIG=1, ECHO=0, VALVE_IN=2, VALVE_OUT=3, SOUND=5, LED=8
+- **Variáveis enviadas**: `distance_cm`, `valve_in`, `valve_out`, `sound_in`
+- **Total**: 3 ESP32-C3 (1 por reservatório)
+
+#### TYPE_DUAL_ULTRA (node_sensor_20)
+- **Firmware**: `firmware/node_sensor_20/`
+- **Reservatórios**: IE01 + IE02 (cisternas Ilha do Engenho)
+- **Sensores**: 2 ultrassônicos AJ-SR04M no mesmo ESP32
+- **GPIOs**:
+  - IE01: TRIG=0, ECHO=1, VALVE_IN=7, VALVE_OUT=8, SOUND=5
+  - IE02: TRIG=2, ECHO=3, VALVE_IN=9, VALVE_OUT=10, SOUND=6
+  - LED=8 (compartilhado)
+- **Variáveis enviadas**: `IE01_distance_cm`, `IE02_distance_cm`, `IE01_valve_in`, `IE01_valve_out`, `IE02_valve_in`, `IE02_valve_out`, `IE01_sound_in`, `IE02_sound_in`
+- **Total**: 1 ESP32-C3 (monitora 2 reservatórios)
+
+**Total de ESP32-C3 no sistema**: 4 microcontroladores
+
+### Universal vs Specific Firmware
+
+**node_sensor_10 (TYPE_SINGLE_ULTRA)** - Universal:
 ```c
 // Firmware identifies itself by MAC address (auto-detected)
 esp_efuse_mac_get_default(node_mac);
 
 // Backend maps MAC → reservoir (not firmware's job)
-// Example:
 // 20:6E:F1:6B:77:58 → RCON
 // DC:06:75:67:6A:CC → RCAV
+// TBD → RB03
 ```
 
-**❌ WRONG**: Don't create reservoir-specific firmware
+**node_sensor_20 (TYPE_DUAL_ULTRA)** - Specific:
 ```c
-// DON'T DO THIS:
+// Envia dados com prefixo do reservatório
+send_telemetry("IE01_distance_cm", ie01_distance);
+send_telemetry("IE02_distance_cm", ie02_distance);
+
+// Backend extrai IE01 e IE02 do prefixo no "type"
+```
+
+**❌ WRONG**: Don't create reservoir-specific firmware for TYPE_SINGLE_ULTRA
+```c
+// DON'T DO THIS for RCON/RCAV/RB03:
 #define NODE_ID "RCON"
 #define RESERVOIR_HEIGHT_CM 400
 ```
 
 ### Individual Variable Transmission
 
-**✅ CORRECT**: Send each variable type separately
+**✅ CORRECT (TYPE_SINGLE_ULTRA)**: Send each variable type separately
 ```json
 // Three separate transmissions:
 {"mac":"20:6E:F1:6B:77:58","type":"distance_cm","value":24480,"battery":5000,"uptime":3,"rssi":-50}
 {"mac":"20:6E:F1:6B:77:58","type":"valve_in","value":1,"battery":5000,"uptime":3,"rssi":-50}
 {"mac":"20:6E:F1:6B:77:58","type":"valve_out","value":0,"battery":5000,"uptime":3,"rssi":-50}
+```
+
+**✅ CORRECT (TYPE_DUAL_ULTRA)**: Send with reservoir prefix
+```json
+// IE01 and IE02 variables from same MAC:
+{"mac":"XX:XX:XX:XX:XX:XX","type":"IE01_distance_cm","value":25480,"battery":5000,"uptime":3,"rssi":-50}
+{"mac":"XX:XX:XX:XX:XX:XX","type":"IE02_distance_cm","value":18350,"battery":5000,"uptime":3,"rssi":-50}
+{"mac":"XX:XX:XX:XX:XX:XX","type":"IE01_valve_in","value":1,"battery":5000,"uptime":3,"rssi":-50}
+{"mac":"XX:XX:XX:XX:XX:XX","type":"IE02_valve_in","value":1,"battery":5000,"uptime":3,"rssi":-50}
+// ... etc (8 variables total)
 ```
 
 **❌ WRONG**: Don't aggregate variables
@@ -98,7 +144,9 @@ send_telemetry("distance_cm", distance);  // Will truncate!
 
 ### Fixed GPIO Pin Assignments
 
-**All 5 nodes use identical GPIO configuration** (defined in `config.h`):
+#### TYPE_SINGLE_ULTRA (node_sensor_10)
+
+**All 3 nodes (RCON, RCAV, RB03) use identical GPIO configuration**:
 
 ```c
 #define TRIG_PIN GPIO_NUM_1      // Ultrasonic trigger
@@ -107,6 +155,29 @@ send_telemetry("distance_cm", distance);  // Will truncate!
 #define VALVE_OUT_PIN GPIO_NUM_3 // Output valve state
 #define SOUND_IN_PIN GPIO_NUM_5  // Water flow detector
 #define LED_STATUS GPIO_NUM_8    // Heartbeat LED
+```
+
+#### TYPE_DUAL_ULTRA (node_sensor_20)
+
+**One ESP32 monitors IE01 + IE02 with different GPIOs**:
+
+```c
+// IE01 GPIOs
+#define IE01_TRIG_PIN GPIO_NUM_0
+#define IE01_ECHO_PIN GPIO_NUM_1
+#define IE01_SOUND_PIN GPIO_NUM_5
+#define IE01_VALVE_IN_PIN GPIO_NUM_7
+#define IE01_VALVE_OUT_PIN GPIO_NUM_8
+
+// IE02 GPIOs
+#define IE02_TRIG_PIN GPIO_NUM_2
+#define IE02_ECHO_PIN GPIO_NUM_3
+#define IE02_SOUND_PIN GPIO_NUM_6
+#define IE02_VALVE_IN_PIN GPIO_NUM_9
+#define IE02_VALVE_OUT_PIN GPIO_NUM_10
+
+// Shared LED
+#define LED_STATUS GPIO_NUM_8  // Same as IE01_VALVE_OUT (careful!)
 ```
 
 **❌ NEVER change GPIO pins per device** - this would require different PCBs
