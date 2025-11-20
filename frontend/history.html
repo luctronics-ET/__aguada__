@@ -141,11 +141,43 @@
         let historyData = {};
         let filteredData = [];
 
-        function initHistory() {
-            // Generate demo data for each sensor
-            Object.keys(SENSORS).forEach(sensorId => {
-                historyData[sensorId] = generateHistoryData(sensorId, 7);
-            });
+        async function initHistory() {
+            // Fetch real data from API
+            try {
+                if (!window.apiService) {
+                    console.warn('[History] API Service não disponível');
+                    return;
+                }
+                
+                // Buscar histórico de todos os sensores
+                const sensors = window.SENSORS || SENSORS || {};
+                const promises = Object.entries(sensors).map(async ([sensorId, sensor]) => {
+                    try {
+                        const history = await window.apiService.getReadingHistory(
+                            sensor.sensor_id || sensorId,
+                            7,
+                            'distance_cm'
+                        );
+                        return [sensorId, history.map(h => ({
+                            timestamp: h.datetime || h.timestamp,
+                            datetime: h.datetime || h.timestamp,
+                            distance_cm: parseFloat(h.valor || 0),
+                            battery: h.battery || h.meta?.battery_mv || 0,
+                            rssi: h.rssi || h.meta?.rssi_dbm || 0
+                        }))];
+                    } catch (error) {
+                        console.error(`[History] Erro ao buscar histórico de ${sensorId}:`, error);
+                        return [sensorId, []];
+                    }
+                });
+                
+                const results = await Promise.all(promises);
+                results.forEach(([sensorId, data]) => {
+                    historyData[sensorId] = data;
+                });
+            } catch (error) {
+                console.error('[History] Erro ao inicializar:', error);
+            }
 
             loadReadings();
             updateStats();
@@ -166,13 +198,25 @@
                 if (sensor && sId !== sensor) return;
 
                 readings.forEach(reading => {
+                    // Filtrar por período
                     if (period === '1d') {
                         const oneDay = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                        if (new Date(reading.timestamp) < oneDay) return;
+                        const readingDate = new Date(reading.timestamp || reading.datetime || 0);
+                        if (isNaN(readingDate.getTime()) || readingDate < oneDay) return;
+                    } else if (period === '7d') {
+                        const sevenDays = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                        const readingDate = new Date(reading.timestamp || reading.datetime || 0);
+                        if (isNaN(readingDate.getTime()) || readingDate < sevenDays) return;
+                    } else if (period === '30d') {
+                        const thirtyDays = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+                        const readingDate = new Date(reading.timestamp || reading.datetime || 0);
+                        if (isNaN(readingDate.getTime()) || readingDate < thirtyDays) return;
                     }
 
                     filteredData.push({
                         sensor: sId,
+                        timestamp: reading.timestamp || reading.datetime,
+                        datetime: reading.datetime || reading.timestamp,
                         ...reading
                     });
                 });
@@ -184,13 +228,39 @@
             } else {
                 filteredData.forEach(reading => {
                     const row = document.createElement('tr');
+                    
+                    // Formatar timestamp corretamente
+                    let timestampStr = '-';
+                    try {
+                        if (reading.timestamp) {
+                            const date = new Date(reading.timestamp);
+                            if (!isNaN(date.getTime())) {
+                                timestampStr = typeof formatDateTime === 'function' 
+                                    ? formatDateTime(reading.timestamp)
+                                    : date.toLocaleString('pt-BR');
+                            } else {
+                                timestampStr = reading.timestamp;
+                            }
+                        }
+                    } catch (e) {
+                        timestampStr = reading.timestamp || '-';
+                    }
+                    
+                    // Formatar valor
+                    let valueDisplay = '-';
+                    if (type === 'distance_cm') {
+                        valueDisplay = reading.distance_cm ? (parseFloat(reading.distance_cm) / 100).toFixed(2) : '-';
+                    } else if (reading[type] !== undefined) {
+                        valueDisplay = reading[type];
+                    }
+                    
                     row.innerHTML = `
-                        <td>${formatDateTime(reading.timestamp)}</td>
-                        <td><strong>${reading.sensor}</strong></td>
+                        <td>${timestampStr}</td>
+                        <td><strong>${reading.sensor || '-'}</strong></td>
                         <td>${type === 'distance_cm' ? 'Distância' : 
                               type === 'valve_in' ? 'Válvula Entrada' :
                               type === 'valve_out' ? 'Válvula Saída' : 'Fluxo'}</td>
-                        <td>${type === 'distance_cm' ? (reading.distance_cm / 100).toFixed(2) : reading[type]}</td>
+                        <td>${valueDisplay}</td>
                         <td>${type === 'distance_cm' ? 'cm' : type.includes('valve') ? '0/1' : 'bool'}</td>
                         <td>${reading.battery ? reading.battery + ' mV' : '-'}</td>
                         <td>${reading.rssi ? reading.rssi + ' dBm' : '-'}</td>
@@ -214,13 +284,28 @@
                 return;
             }
 
-            const csvData = filteredData.map(r => ({
-                'Data/Hora': formatDateTime(r.timestamp),
-                'Sensor': r.sensor,
-                'Valor': r.distance_cm || r.valve_in || r.valve_out || r.sound_in,
-                'Bateria': r.battery || '',
-                'RSSI': r.rssi || ''
-            }));
+            const csvData = filteredData.map(r => {
+                // Formatar timestamp para CSV
+                let timestampStr = '-';
+                try {
+                    const date = new Date(r.timestamp || r.datetime || 0);
+                    if (!isNaN(date.getTime())) {
+                        timestampStr = typeof formatDateTime === 'function' 
+                            ? formatDateTime(r.timestamp || r.datetime)
+                            : date.toLocaleString('pt-BR');
+                    }
+                } catch (e) {
+                    timestampStr = r.timestamp || r.datetime || '-';
+                }
+                
+                return {
+                    'Data/Hora': timestampStr,
+                    'Sensor': r.sensor || '-',
+                    'Valor': r.distance_cm || r.valve_in || r.valve_out || r.sound_in || '-',
+                    'Bateria': r.battery || '',
+                    'RSSI': r.rssi || ''
+                };
+            });
 
             exportToCSV(csvData, 'aguada-historico.csv');
         }

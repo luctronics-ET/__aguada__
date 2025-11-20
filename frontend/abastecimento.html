@@ -249,23 +249,24 @@
         let durationInterval = null;
 
         // Initialize supply history chart
-        function initSupplyChart() {
+        async function initSupplyChart() {
             const ctx = document.getElementById('supplyHistoryChart').getContext('2d');
+            const supplyData = await fetchSupplyData(7);
             supplyChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: generateDayLabels(7),
+                    labels: supplyData.labels,
                     datasets: [
                         {
                             label: 'Volume Abastecido (m³)',
-                            data: generateMockSupplyData(7),
+                            data: supplyData.volumes,
                             backgroundColor: 'rgba(16, 185, 129, 0.7)',
                             borderColor: 'rgba(16, 185, 129, 1)',
                             borderWidth: 1
                         },
                         {
                             label: 'Número de Sessões',
-                            data: [3, 2, 4, 3, 2, 3, 2],
+                            data: supplyData.sessions,
                             type: 'line',
                             borderColor: 'rgba(103, 126, 234, 1)',
                             backgroundColor: 'rgba(103, 126, 234, 0.1)',
@@ -292,11 +293,85 @@
                 }
             });
         }
+        
+        // Fetch supply data from API
+        async function fetchSupplyData(days = 7) {
+            try {
+                if (!window.apiService) {
+                    console.warn('[Abastecimento] API Service não disponível');
+                    return {
+                        labels: generateDayLabels(days),
+                        volumes: Array(days).fill(0),
+                        sessions: Array(days).fill(0)
+                    };
+                }
+                
+                // Buscar histórico de leituras para detectar abastecimento
+                const readings = await window.apiService.getLatestReadings();
+                const history = await Promise.all(
+                    ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'].map(id => 
+                        window.apiService.getReadingHistory(
+                            window.SENSORS?.[id]?.sensor_id || id,
+                            days,
+                            'distance_cm'
+                        )
+                    )
+                );
+                
+                // Processar dados para detectar abastecimento (aumento de volume)
+                const labels = generateDayLabels(days);
+                const volumes = Array(days).fill(0);
+                const sessions = Array(days).fill(0);
+                
+                // Simplificado: usar dados das leituras
+                history.forEach((sensorHistory, idx) => {
+                    sensorHistory.forEach(reading => {
+                        const date = new Date(reading.datetime);
+                        const dayIndex = days - Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+                        if (dayIndex >= 0 && dayIndex < days) {
+                            volumes[dayIndex] += parseFloat(reading.valor || 0) / 100; // Converter para m³
+                        }
+                    });
+                });
+                
+                return { labels, volumes, sessions };
+            } catch (error) {
+                console.error('[Abastecimento] Erro ao buscar dados:', error);
+                return {
+                    labels: generateDayLabels(days),
+                    volumes: Array(days).fill(0),
+                    sessions: Array(days).fill(0)
+                };
+            }
+        }
 
         // Update supply status
-        function updateSupplyStatus() {
-            // Mock detection - in production, check actual readings
-            const isSupplying = Math.random() > 0.7;
+        async function updateSupplyStatus() {
+            try {
+                if (!window.apiService) {
+                    console.warn('[Abastecimento] API Service não disponível');
+                    return;
+                }
+                
+                // Buscar leituras atuais
+                const readings = await window.apiService.getLatestReadings();
+                if (!readings) return;
+                
+                // Detectar abastecimento: verificar se o volume está aumentando
+                // Comparar leituras recentes para detectar tendência de aumento
+                let isSupplying = false;
+                let volumeIncrease = 0;
+                
+                Object.values(readings).forEach(reading => {
+                    if (reading.distance_cm && reading.timestamp) {
+                        // Simplificado: considerar abastecimento se volume > 50%
+                        const volumePercent = 100 - (reading.distance_cm / 400) * 100;
+                        if (volumePercent > 50) {
+                            isSupplying = true;
+                            volumeIncrease += reading.distance_cm;
+                        }
+                    }
+                });
             
             const indicator = document.getElementById('supplyIndicator');
             const status = document.getElementById('supplyStatus');
@@ -321,28 +396,79 @@
                 }
             }
 
-            // Update stats
-            const volumeToday = (Math.random() * 40 + 10).toFixed(1);
-            const dailyTarget = 50;
-            const progress = (volumeToday / dailyTarget) * 100;
+                // Update stats
+                let totalVolume = 0;
+                let totalCapacity = 0;
+                
+                Object.entries(readings).forEach(([id, reading]) => {
+                    if (reading.distance_cm) {
+                        const sensor = window.SENSORS?.[id];
+                        if (sensor) {
+                            const volumeM3 = calculateVolumeM3(id, reading.distance_cm);
+                            totalVolume += volumeM3;
+                            totalCapacity += sensor.height * 0.01 * 20.43; // Simplificado
+                        }
+                    }
+                });
+                
+                const volumeToday = totalVolume.toFixed(1);
+                const dailyTarget = 50;
+                const progress = Math.min((volumeToday / dailyTarget) * 100, 100);
+                
+                document.getElementById('volumeToday').textContent = `${volumeToday} m³`;
+                document.getElementById('volumeProgress').style.width = `${progress}%`;
+                
+                // Calcular taxa média (simplificado)
+                const avgRate = isSupplying ? 150 : 0;
+                document.getElementById('avgRate').textContent = `${avgRate} L/min`;
+                
+                // Calcular tempo total (simplificado)
+                const totalHours = Math.floor(volumeToday / 0.15); // Assumindo 150 L/min
+                document.getElementById('totalTime').textContent = `${totalHours}h 0min`;
+                
+                // Update prediction
+                const currentLevel = totalCapacity > 0 ? (totalVolume / totalCapacity * 100) : 0;
+                const remaining = (totalCapacity - totalVolume).toFixed(1);
+                
+                document.getElementById('currentLevel').textContent = `${currentLevel.toFixed(0)}%`;
+                document.getElementById('remainingVolume').textContent = `${remaining} m³`;
+                
+                // Estimar tempo restante
+                if (isSupplying && avgRate > 0) {
+                    const remainingMinutes = (remaining * 1000) / avgRate;
+                    const estimated = new Date(Date.now() + remainingMinutes * 60000);
+                    document.getElementById('estimatedTime').textContent = estimated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                } else {
+                    document.getElementById('estimatedTime').textContent = '--:--';
+                }
+            } catch (error) {
+                console.error('[Abastecimento] Erro ao atualizar status:', error);
+            }
+        }
+        
+        // Função auxiliar para calcular volume (se não estiver disponível globalmente)
+        function calculateVolumeM3(sensorId, distance_cm) {
+            const sensor = window.SENSORS?.[sensorId];
+            if (!sensor) return 0;
             
-            document.getElementById('volumeToday').textContent = `${volumeToday} m³`;
-            document.getElementById('volumeProgress').style.width = `${Math.min(progress, 100)}%`;
+            const config = getReservoirConfig(sensorId);
+            if (!config) return 0;
             
-            document.getElementById('avgRate').textContent = `${(Math.random() * 200 + 50).toFixed(0)} L/min`;
-            document.getElementById('totalTime').textContent = `${Math.floor(Math.random() * 8)}h ${Math.floor(Math.random() * 60)}min`;
+            const nivel_cm = config.altura_cm - distance_cm;
+            if (nivel_cm <= 0) return 0;
             
-            // Update prediction
-            const currentLevel = Math.floor(Math.random() * 40 + 40);
-            const remaining = ((100 - currentLevel) * 80 / 100).toFixed(1);
-            
-            document.getElementById('currentLevel').textContent = `${currentLevel}%`;
-            document.getElementById('remainingVolume').textContent = `${remaining} m³`;
-            
-            const now = new Date();
-            const estimatedMinutes = Math.floor(Math.random() * 120 + 30);
-            const estimated = new Date(now.getTime() + estimatedMinutes * 60000);
-            document.getElementById('estimatedTime').textContent = estimated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            return (config.area_m2 * nivel_cm / 100).toFixed(1);
+        }
+        
+        function getReservoirConfig(sensorId) {
+            const reservoirs = {
+                'RCON': { tipo: 'cilindrico', altura_cm: 400, diametro_cm: 510, area_m2: 20.43, volume_max_m3: 81.7 },
+                'RCAV': { tipo: 'cilindrico', altura_cm: 400, diametro_cm: 510, area_m2: 20.43, volume_max_m3: 81.7 },
+                'RB03': { tipo: 'cilindrico', altura_cm: 400, diametro_cm: 510, area_m2: 20.43, volume_max_m3: 81.7 },
+                'IE01': { tipo: 'retangular', altura_cm: 250, area_m2: 10.0, volume_max_m3: 25.0 },
+                'IE02': { tipo: 'retangular', altura_cm: 250, area_m2: 10.0, volume_max_m3: 25.0 }
+            };
+            return reservoirs[sensorId];
         }
 
         function startDurationTimer() {
@@ -377,16 +503,16 @@
             return labels;
         }
 
-        function generateMockSupplyData(days) {
-            return Array.from({length: days}, () => (Math.random() * 60 + 20).toFixed(1));
-        }
-
         // Initialize
-        initSupplyChart();
-        updateSupplyStatus();
+        async function init() {
+            await initSupplyChart();
+            await updateSupplyStatus();
+            
+            // Update every 10 seconds
+            setInterval(updateSupplyStatus, 10000);
+        }
         
-        // Update every 5 seconds
-        setInterval(updateSupplyStatus, 5000);
+        init();
     </script>
 </body>
 </html>

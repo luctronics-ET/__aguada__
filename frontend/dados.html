@@ -359,19 +359,87 @@
         // Carregar dados da API
         async function loadData() {
             try {
-                const response = await fetch('http://localhost:3000/api/readings/raw?limit=1000');
+                const baseURL = window.apiService?.baseURL || 'http://localhost:3000/api';
+                const response = await fetch(`${baseURL}/readings/raw?limit=1000`);
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    allData = result.data;
+                    // Processar dados: garantir que meta seja objeto
+                    allData = result.data.map(row => {
+                        // Parsear meta se for string
+                        if (row.meta && typeof row.meta === 'string') {
+                            try {
+                                row.meta = JSON.parse(row.meta);
+                            } catch (e) {
+                                row.meta = {};
+                            }
+                        }
+                        // Garantir que datetime seja válido
+                        if (row.datetime && typeof row.datetime === 'string') {
+                            const date = new Date(row.datetime);
+                            if (isNaN(date.getTime())) {
+                                console.warn('Timestamp inválido:', row.datetime);
+                            }
+                        }
+                        return row;
+                    });
+                    
+                    // Ordenar por padrão por datetime DESC
+                    allData.sort((a, b) => {
+                        const dateA = new Date(a.datetime || 0).getTime();
+                        const dateB = new Date(b.datetime || 0).getTime();
+                        return dateB - dateA;
+                    });
+                    
                     filteredData = [...allData];
                     updateTable();
                     updateLastUpdate();
                     document.getElementById('totalCount').textContent = allData.length;
+                } else {
+                    console.warn('Resposta da API sem dados:', result);
+                    showError();
                 }
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
                 showError();
+            }
+        }
+
+        // Parse meta field (pode ser string JSON ou objeto)
+        function parseMeta(meta) {
+            if (!meta) return {};
+            if (typeof meta === 'string') {
+                try {
+                    return JSON.parse(meta);
+                } catch (e) {
+                    return {};
+                }
+            }
+            return meta;
+        }
+
+        // Formatar timestamp corretamente
+        function formatTimestamp(datetime) {
+            if (!datetime) return '-';
+            try {
+                const date = new Date(datetime);
+                if (isNaN(date.getTime())) {
+                    // Tentar parsear formato alternativo
+                    return datetime;
+                }
+                const dateStr = date.toLocaleDateString('pt-BR', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric' 
+                });
+                const timeStr = date.toLocaleTimeString('pt-BR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                });
+                return `${dateStr} ${timeStr}`;
+            } catch (e) {
+                return datetime;
             }
         }
 
@@ -394,27 +462,33 @@
             }
 
             tbody.innerHTML = pageData.map(row => {
-                const timestamp = new Date(row.datetime);
-                const date = timestamp.toLocaleDateString('pt-BR');
-                const time = timestamp.toLocaleTimeString('pt-BR');
+                // Parsear meta corretamente
+                const meta = parseMeta(row.meta);
                 
+                // Formatar timestamp
+                const timestampStr = formatTimestamp(row.datetime);
+                
+                // Formatar valor
                 let valueDisplay = row.valor;
                 if (row.variavel === 'distance_cm') {
-                    valueDisplay = `${parseFloat(row.valor).toFixed(2)} cm`;
-                } else if (row.variavel.includes('valve') || row.variavel.includes('sound')) {
-                    valueDisplay = row.valor === '1' ? '✓ Ativo' : '✗ Inativo';
+                    valueDisplay = `${parseFloat(row.valor || 0).toFixed(2)} cm`;
+                } else if (row.variavel && (row.variavel.includes('valve') || row.variavel.includes('sound'))) {
+                    valueDisplay = row.valor === '1' || row.valor === 1 ? '✓ Ativo' : '✗ Inativo';
+                } else {
+                    valueDisplay = row.valor || '-';
                 }
 
-                const battery = row.meta?.battery_mv ? `${(row.meta.battery_mv / 1000).toFixed(2)}V` : '-';
-                const rssi = row.meta?.rssi_dbm ? `${row.meta.rssi_dbm} dBm` : '-';
-                const uptime = row.meta?.uptime_sec ? formatUptime(row.meta.uptime_sec) : '-';
-                const mac = row.meta?.node_mac || '-';
+                // Extrair dados do meta
+                const battery = meta.battery_mv ? `${(parseFloat(meta.battery_mv) / 1000).toFixed(2)}V` : '-';
+                const rssi = meta.rssi_dbm ? `${meta.rssi_dbm} dBm` : '-';
+                const uptime = meta.uptime_sec ? formatUptime(parseInt(meta.uptime_sec)) : '-';
+                const mac = meta.node_mac || '-';
 
                 return `
                     <tr>
-                        <td class="timestamp">${date} ${time}</td>
-                        <td><span class="sensor-badge sensor-${row.elemento_id}">${row.elemento_id}</span></td>
-                        <td class="variable-type">${row.variavel}</td>
+                        <td class="timestamp">${timestampStr}</td>
+                        <td><span class="sensor-badge sensor-${row.elemento_id || 'UNKNOWN'}">${row.elemento_id || row.sensor_id || '-'}</span></td>
+                        <td class="variable-type">${row.variavel || '-'}</td>
                         <td class="value-cell">${valueDisplay}</td>
                         <td class="mac-address">${mac}</td>
                         <td>${battery}</td>
@@ -474,43 +548,62 @@
 
                 switch(column) {
                     case 'datetime':
-                        aVal = new Date(a.datetime);
-                        bVal = new Date(b.datetime);
+                        aVal = new Date(a.datetime || 0).getTime();
+                        bVal = new Date(b.datetime || 0).getTime();
                         break;
                     case 'sensor':
-                        aVal = a.elemento_id;
-                        bVal = b.elemento_id;
+                        aVal = (a.elemento_id || a.sensor_id || '').toLowerCase();
+                        bVal = (b.elemento_id || b.sensor_id || '').toLowerCase();
                         break;
                     case 'variable':
-                        aVal = a.variavel;
-                        bVal = b.variavel;
+                        aVal = (a.variavel || '').toLowerCase();
+                        bVal = (b.variavel || '').toLowerCase();
                         break;
                     case 'value':
-                        aVal = parseFloat(a.valor);
-                        bVal = parseFloat(b.valor);
+                        aVal = parseFloat(a.valor || 0);
+                        bVal = parseFloat(b.valor || 0);
+                        if (isNaN(aVal)) aVal = 0;
+                        if (isNaN(bVal)) bVal = 0;
                         break;
                     case 'mac':
-                        aVal = a.meta?.node_mac || '';
-                        bVal = b.meta?.node_mac || '';
+                        const metaA = parseMeta(a.meta);
+                        const metaB = parseMeta(b.meta);
+                        aVal = (metaA.node_mac || '').toLowerCase();
+                        bVal = (metaB.node_mac || '').toLowerCase();
                         break;
                     case 'battery':
-                        aVal = a.meta?.battery_mv || 0;
-                        bVal = b.meta?.battery_mv || 0;
+                        const metaA2 = parseMeta(a.meta);
+                        const metaB2 = parseMeta(b.meta);
+                        aVal = parseFloat(metaA2.battery_mv || 0);
+                        bVal = parseFloat(metaB2.battery_mv || 0);
                         break;
                     case 'rssi':
-                        aVal = a.meta?.rssi_dbm || 0;
-                        bVal = b.meta?.rssi_dbm || 0;
+                        const metaA3 = parseMeta(a.meta);
+                        const metaB3 = parseMeta(b.meta);
+                        aVal = parseFloat(metaA3.rssi_dbm || 0);
+                        bVal = parseFloat(metaB3.rssi_dbm || 0);
                         break;
                     case 'uptime':
-                        aVal = a.meta?.uptime_sec || 0;
-                        bVal = b.meta?.uptime_sec || 0;
+                        const metaA4 = parseMeta(a.meta);
+                        const metaB4 = parseMeta(b.meta);
+                        aVal = parseInt(metaA4.uptime_sec || 0);
+                        bVal = parseInt(metaB4.uptime_sec || 0);
                         break;
+                    default:
+                        aVal = '';
+                        bVal = '';
                 }
 
                 if (sortDirection === 'asc') {
-                    return aVal > bVal ? 1 : -1;
+                    if (typeof aVal === 'string') {
+                        return aVal.localeCompare(bVal);
+                    }
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
                 } else {
-                    return aVal < bVal ? 1 : -1;
+                    if (typeof aVal === 'string') {
+                        return bVal.localeCompare(aVal);
+                    }
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
                 }
             });
 
@@ -520,44 +613,64 @@
 
         // Filtros
         function filterTable() {
-            const inputs = document.querySelectorAll('th input, th select');
-            const filters = {};
-
-            inputs.forEach((input, index) => {
-                const value = input.value.toLowerCase().trim();
-                if (value) {
-                    const columns = ['datetime', 'sensor', 'variable', 'value', 'mac'];
-                    filters[columns[index]] = value;
-                }
-            });
+            // Obter valores dos filtros diretamente pelos elementos
+            const datetimeFilter = document.querySelector('th:nth-child(1) input')?.value?.toLowerCase().trim() || '';
+            const sensorFilter = document.querySelector('th:nth-child(2) select')?.value?.toLowerCase().trim() || '';
+            const variableFilter = document.querySelector('th:nth-child(3) select')?.value?.toLowerCase().trim() || '';
+            const valueFilter = document.querySelector('th:nth-child(4) input')?.value?.toLowerCase().trim() || '';
+            const macFilter = document.querySelector('th:nth-child(5) input')?.value?.toLowerCase().trim() || '';
 
             filteredData = allData.filter(row => {
-                for (let key in filters) {
-                    const filterValue = filters[key];
-                    let rowValue;
-
-                    switch(key) {
-                        case 'datetime':
-                            rowValue = new Date(row.datetime).toLocaleString('pt-BR').toLowerCase();
-                            break;
-                        case 'sensor':
-                            rowValue = row.elemento_id.toLowerCase();
-                            break;
-                        case 'variable':
-                            rowValue = row.variavel.toLowerCase();
-                            break;
-                        case 'value':
-                            rowValue = row.valor.toLowerCase();
-                            break;
-                        case 'mac':
-                            rowValue = (row.meta?.node_mac || '').toLowerCase();
-                            break;
+                // Filtro de timestamp
+                if (datetimeFilter) {
+                    try {
+                        const rowDate = new Date(row.datetime || 0);
+                        const dateStr = rowDate.toLocaleString('pt-BR').toLowerCase();
+                        if (!dateStr.includes(datetimeFilter)) {
+                            return false;
+                        }
+                    } catch (e) {
+                        // Se não conseguir parsear, verificar string direta
+                        const dateStr = (row.datetime || '').toLowerCase();
+                        if (!dateStr.includes(datetimeFilter)) {
+                            return false;
+                        }
                     }
+                }
 
-                    if (!rowValue.includes(filterValue)) {
+                // Filtro de sensor
+                if (sensorFilter) {
+                    const sensorId = (row.elemento_id || row.sensor_id || '').toLowerCase();
+                    if (sensorId !== sensorFilter) {
                         return false;
                     }
                 }
+
+                // Filtro de variável
+                if (variableFilter) {
+                    const variable = (row.variavel || '').toLowerCase();
+                    if (variable !== variableFilter) {
+                        return false;
+                    }
+                }
+
+                // Filtro de valor
+                if (valueFilter) {
+                    const value = String(row.valor || '').toLowerCase();
+                    if (!value.includes(valueFilter)) {
+                        return false;
+                    }
+                }
+
+                // Filtro de MAC
+                if (macFilter) {
+                    const meta = parseMeta(row.meta);
+                    const mac = (meta.node_mac || '').toLowerCase();
+                    if (!mac.includes(macFilter)) {
+                        return false;
+                    }
+                }
+
                 return true;
             });
 

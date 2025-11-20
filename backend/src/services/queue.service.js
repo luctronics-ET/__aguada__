@@ -11,98 +11,151 @@ const connection = {
   port: parseInt(process.env.REDIS_PORT || '6379'),
 };
 
-/**
- * Fila para processamento de leituras
- */
-export const readingsQueue = new Queue('readings-processing', {
-  connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000, // 2s, 4s, 8s
-    },
-    removeOnComplete: {
-      age: 3600, // Manter jobs completos por 1 hora
-      count: 1000, // Manter últimos 1000 jobs
-    },
-    removeOnFail: {
-      age: 86400, // Manter jobs falhos por 24 horas
-    },
-  },
-});
+// Variáveis para queue e worker (inicializadas lazy)
+let readingsQueue = null;
+let readingsWorker = null;
+let queueEnabled = false;
 
 /**
- * Worker para processar leituras assincronamente
+ * Inicializa a fila e worker (lazy initialization)
  */
-export const readingsWorker = new Worker(
-  'readings-processing',
-  async (job) => {
-    const { sensor, valorReal, elementoParametros, datetime, type } = job.data;
-    
-    logger.info('Processando leitura na fila', {
-      jobId: job.id,
-      sensor_id: sensor.sensor_id,
-      type,
+export async function initializeQueue() {
+  if (queueEnabled) return;
+  
+  try {
+    // Verificar se Redis está disponível
+    if (!redisClient.isOpen) {
+      logger.warn('[Queue] Redis não conectado, fila desabilitada');
+      return;
+    }
+
+    /**
+     * Fila para processamento de leituras
+     */
+    readingsQueue = new Queue('readings-processing', {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000, // 2s, 4s, 8s
+        },
+        removeOnComplete: {
+          age: 3600, // Manter jobs completos por 1 hora
+          count: 1000, // Manter últimos 1000 jobs
+        },
+        removeOnFail: {
+          age: 86400, // Manter jobs falhos por 24 horas
+        },
+      },
     });
 
-    try {
-      // Processar compressão se for distance_cm
-      if (type === 'distance_cm') {
-        await compressionService.processCompression(
-          sensor,
-          valorReal,
-          elementoParametros,
-          datetime
-        );
+    /**
+     * Worker para processar leituras assincronamente
+     */
+    readingsWorker = new Worker(
+      'readings-processing',
+      async (job) => {
+        const { sensor, valorReal, elementoParametros, datetime, type } = job.data;
+        
+        logger.info('Processando leitura na fila', {
+          jobId: job.id,
+          sensor_id: sensor.sensor_id,
+          type,
+        });
+
+        try {
+          // Processar compressão se for distance_cm
+          if (type === 'distance_cm') {
+            await compressionService.processCompression(
+              sensor,
+              valorReal,
+              elementoParametros,
+              datetime
+            );
+          }
+
+          // Invalidar cache
+          await cacheService.invalidateReadings();
+
+          logger.info('Leitura processada com sucesso', {
+            jobId: job.id,
+            sensor_id: sensor.sensor_id,
+          });
+
+          return { success: true };
+        } catch (error) {
+          logger.error('Erro ao processar leitura na fila:', error);
+          throw error; // Re-throw para retry automático
+        }
+      },
+      {
+        connection,
+        concurrency: 5, // Processar até 5 leituras simultaneamente
+        limiter: {
+          max: 100, // Máximo 100 jobs
+          duration: 1000, // por segundo
+        },
       }
+    );
 
-      // Invalidar cache
-      await cacheService.invalidateReadings();
+    // Event handlers do worker
+    readingsWorker.on('completed', (job) => {
+      logger.debug('Job completado', { jobId: job.id });
+    });
 
-      logger.info('Leitura processada com sucesso', {
-        jobId: job.id,
-        sensor_id: sensor.sensor_id,
+    readingsWorker.on('failed', (job, err) => {
+      logger.error('Job falhou', {
+        jobId: job?.id,
+        error: err.message,
+        attempts: job?.attemptsMade,
       });
+    });
 
-      return { success: true };
-    } catch (error) {
-      logger.error('Erro ao processar leitura na fila:', error);
-      throw error; // Re-throw para retry automático
-    }
-  },
-  {
-    connection,
-    concurrency: 5, // Processar até 5 leituras simultaneamente
-    limiter: {
-      max: 100, // Máximo 100 jobs
-      duration: 1000, // por segundo
-    },
+    readingsWorker.on('error', (err) => {
+      logger.error('Erro no worker:', err);
+    });
+
+    queueEnabled = true;
+    logger.info('✅ Queue worker inicializado');
+  } catch (error) {
+    logger.warn('[Queue] Falha ao inicializar fila, continuando sem fila:', error.message);
+    queueEnabled = false;
   }
-);
+}
 
-// Event handlers do worker
-readingsWorker.on('completed', (job) => {
-  logger.debug('Job completado', { jobId: job.id });
-});
+// Exportar getters para acesso seguro
+export function getReadingsQueue() {
+  return readingsQueue;
+}
 
-readingsWorker.on('failed', (job, err) => {
-  logger.error('Job falhou', {
-    jobId: job?.id,
-    error: err.message,
-    attempts: job?.attemptsMade,
+export function getReadingsWorker() {
+  return readingsWorker;
+}
+
+// Inicializar quando Redis estiver conectado
+if (typeof redisClient !== 'undefined' && redisClient.isOpen) {
+  initializeQueue().catch(err => {
+    logger.warn('[Queue] Erro ao inicializar fila:', err.message);
   });
-});
-
-readingsWorker.on('error', (err) => {
-  logger.error('Erro no worker:', err);
-});
+}
 
 /**
  * Adiciona leitura à fila para processamento assíncrono
  */
 export async function enqueueReading(data) {
   try {
+    // Inicializar fila se necessário
+    if (!queueEnabled) {
+      await initializeQueue();
+    }
+    
+    if (!readingsQueue) {
+      logger.warn('[Queue] Fila não disponível, processando diretamente');
+      // Processar diretamente se fila não estiver disponível
+      return null;
+    }
+    
     const job = await readingsQueue.add('process-reading', data, {
       priority: data.type === 'distance_cm' ? 1 : 2, // distance_cm tem prioridade maior
     });
@@ -115,7 +168,8 @@ export async function enqueueReading(data) {
     return job;
   } catch (error) {
     logger.error('Erro ao adicionar leitura à fila:', error);
-    throw error;
+    // Não lançar erro, apenas logar
+    return null;
   }
 }
 
@@ -124,6 +178,10 @@ export async function enqueueReading(data) {
  */
 export async function getQueueStats() {
   try {
+    if (!readingsQueue) {
+      return { enabled: false, message: 'Fila não disponível' };
+    }
+    
     const [waiting, active, completed, failed] = await Promise.all([
       readingsQueue.getWaitingCount(),
       readingsQueue.getActiveCount(),
@@ -132,6 +190,7 @@ export async function getQueueStats() {
     ]);
 
     return {
+      enabled: true,
       waiting,
       active,
       completed,
@@ -140,13 +199,15 @@ export async function getQueueStats() {
     };
   } catch (error) {
     logger.error('Erro ao obter estatísticas da fila:', error);
-    return null;
+    return { enabled: false, error: error.message };
   }
 }
 
+// Default export
 export default {
-  readingsQueue,
-  readingsWorker,
+  getReadingsQueue,
+  getReadingsWorker,
+  initializeQueue,
   enqueueReading,
   getQueueStats,
 };

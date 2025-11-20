@@ -1,6 +1,6 @@
 # AGUADA MCP Server - Quick Start Guide
 
-## ✅ MCP Server Configurado com Sucesso!
+## ✅ MCP Server Configurado com Sucesso
 
 O servidor MCP do AGUADA está instalado e pronto para uso.
 
@@ -22,13 +22,33 @@ mcp-server/
 
 O arquivo `.vscode/settings.json` foi atualizado com:
 
+**Para Cursor IDE:**
+Crie o arquivo `.cursor/mcp.json` na raiz do projeto:
+
+```json
+{
+  "mcpServers": {
+    "aguada": {
+      "command": "node",
+      "args": [
+        "/home/luciano/Área de trabalho/aguada/mcp-server/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+**Para VS Code:**
+Crie o arquivo `.vscode/settings.json`:
+
 ```json
 {
   "mcp.servers": {
     "aguada": {
       "command": "node",
       "args": [
-        "/home/luciano/Área de trabalho/__aguada__/mcp-server/dist/index.js"
+        "/home/luciano/Área de trabalho/aguada/mcp-server/dist/index.js"
       ]
     }
   }
@@ -38,6 +58,7 @@ O arquivo `.vscode/settings.json` foi atualizado com:
 ### 🚀 Como Usar
 
 #### 1. Recarregar VS Code
+
 ```
 Ctrl+Shift+P > Developer: Reload Window
 ```
@@ -47,39 +68,47 @@ Ctrl+Shift+P > Developer: Reload Window
 O servidor MCP fornece 5 ferramentas:
 
 **`get_telemetry`**
+
 - Buscar dados de telemetria dos sensores
 - Parâmetros: `node_id`, `start_time`, `end_time`
 
 **`get_reservoir_status`**
+
 - Status atual de um reservatório
 - Parâmetros: `reservoir_id` (CAV, CAM, CAS, CI)
 
 **`get_system_overview`**
+
 - Visão geral completa do sistema
 - Sem parâmetros
 
 **`analyze_consumption`**
+
 - Análise de padrões de consumo
 - Parâmetros: `period` (daily, weekly, monthly)
 
 **`check_events`**
+
 - Verificar eventos hidráulicos
 - Parâmetros: `event_type`, `hours`
 
 #### 3. Recursos Disponíveis
 
 **Configurações:**
+
 - `aguada://config/reservoirs` - JSON dos reservatórios
 - `aguada://config/sensors` - JSON dos sensores
 - `aguada://config/topology` - Topologia da rede
 
 **Documentação:**
+
 - `aguada://docs/schema` - Schema do banco de dados
 - `aguada://docs/api` - Documentação da API
 
 ### 🧪 Testar o Servidor
 
 #### Opção 1: MCP Inspector (Recomendado)
+
 ```bash
 cd mcp-server
 npm run inspector
@@ -88,6 +117,7 @@ npm run inspector
 Abre interface gráfica para testar todas as ferramentas e recursos.
 
 #### Opção 2: Linha de Comando
+
 ```bash
 cd mcp-server
 npm start
@@ -96,6 +126,7 @@ npm start
 O servidor aguarda comandos via stdio (usado pelo VS Code/Claude).
 
 #### Opção 3: Suite de Testes
+
 ```bash
 cd mcp-server
 ./test.sh
@@ -118,6 +149,7 @@ No VS Code, você pode usar o Copilot para interagir com o MCP:
 ### 🔗 Integração com o Sistema
 
 O MCP server **lê** os arquivos de configuração do projeto:
+
 - `/config/reservoirs.json` ✅
 - `/config/sensors.json` ✅
 - `/config/network_topology.json` ✅
@@ -127,13 +159,15 @@ Em **produção**, conecte ao PostgreSQL/TimescaleDB para dados em tempo real.
 
 ### 🛠️ Desenvolvimento
 
-#### Recompilar após mudanças:
+#### Recompilar após mudanças
+
 ```bash
 cd mcp-server
 npm run build
 ```
 
-#### Modo watch (recompila automaticamente):
+#### Modo watch (recompila automaticamente)
+
 ```bash
 cd mcp-server
 npm run dev
@@ -150,10 +184,12 @@ npm run dev
 ### 🐛 Troubleshooting
 
 **Servidor não aparece no VS Code?**
+
 - Recarregue a janela: `Ctrl+Shift+P > Reload Window`
 - Verifique o caminho em `.vscode/settings.json`
 
 **Erro ao compilar?**
+
 ```bash
 cd mcp-server
 rm -rf node_modules dist
@@ -162,14 +198,28 @@ npm run build
 ```
 
 **Testar conexão básica:**
+
 ```bash
 cd mcp-server
 timeout 2 node dist/index.js
 # Deve exibir: "AGUADA MCP Server running on stdio"
 ```
 
+**⚠️ Nota Importante:**
+O servidor MCP usa stdio (stdin/stdout) para comunicação. Quando executado diretamente, ele fica aguardando comandos e pode parecer "travado". Isso é **normal** - o Cursor/VS Code gerencia esse processo automaticamente.
+
+**Se o Node.js estiver travado:**
+
+```bash
+# Encontrar e encerrar processos MCP travados
+pgrep -f "mcp-server" | xargs kill -9
+
+# Verificar processos Node.js
+ps aux | grep node | grep -v grep
+```
+
 ---
 
-## 🎉 Servidor MCP Configurado!
+## 🎉 Servidor MCP Configurado
 
 O AGUADA MCP Server está pronto para fornecer contexto inteligente sobre o sistema de monitoramento hidráulico diretamente no VS Code.

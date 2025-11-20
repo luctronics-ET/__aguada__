@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aguada": {
+      "command": "node",
+      "args": [
+        "/home/luciano/Área de trabalho/aguada/mcp-server/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
+

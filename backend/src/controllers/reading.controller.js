@@ -41,8 +41,7 @@ export async function getLatestReadings(req, res) {
       )
       SELECT 
         s.sensor_id,
-        s.nome_sensor,
-        s.mac_address,
+        s.node_mac as mac_address,
         s.elemento_id,
         r.variavel,
         r.valor,
@@ -51,7 +50,7 @@ export async function getLatestReadings(req, res) {
         r.fonte
       FROM aguada.sensores s
       LEFT JOIN latest_readings r ON s.sensor_id = r.sensor_id
-      WHERE s.ativo = true
+      WHERE s.status = 'ativo'
       ORDER BY s.elemento_id, s.sensor_id, r.variavel;
     `;
 
@@ -63,7 +62,6 @@ export async function getLatestReadings(req, res) {
       if (!readings[row.sensor_id]) {
         readings[row.sensor_id] = {
           sensor_id: row.sensor_id,
-          nome_sensor: row.nome_sensor,
           mac_address: row.mac_address,
           elemento_id: row.elemento_id,
           variables: {}

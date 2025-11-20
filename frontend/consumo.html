@@ -185,7 +185,7 @@
         let charts = {};
 
         // Initialize charts
-        function initCharts() {
+        async function initCharts() {
             // Consumo por Hora
             const ctx1 = document.getElementById('consumoHorarioChart').getContext('2d');
             charts.consumoHorario = new Chart(ctx1, {
@@ -194,7 +194,7 @@
                     labels: Array.from({length: 24}, (_, i) => `${i}:00`),
                     datasets: [{
                         label: 'Consumo (L)',
-                        data: generateMockHourlyData(),
+                        data: await fetchHourlyConsumption(),
                         backgroundColor: 'rgba(103, 126, 234, 0.7)',
                         borderColor: 'rgba(103, 126, 234, 1)',
                         borderWidth: 1
@@ -217,12 +217,13 @@
 
             // Consumo por Reservatório
             const ctx2 = document.getElementById('consumoReservatorioChart').getContext('2d');
+            const reservoirData = await fetchReservoirConsumption();
             charts.consumoReservatorio = new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
                     labels: ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'],
                     datasets: [{
-                        data: [45, 15, 20, 10, 10],
+                        data: reservoirData,
                         backgroundColor: [
                             'rgba(30, 60, 114, 0.8)',
                             'rgba(103, 126, 234, 0.8)',
@@ -243,13 +244,14 @@
 
             // Tendência (7 dias)
             const ctx3 = document.getElementById('tendenciaChart').getContext('2d');
+            const dailyData = await fetchDailyConsumption(7);
             charts.tendencia = new Chart(ctx3, {
                 type: 'line',
                 data: {
-                    labels: generateDayLabels(7),
+                    labels: dailyData.labels,
                     datasets: [{
                         label: 'Consumo (m³)',
-                        data: generateMockDailyData(7),
+                        data: dailyData.values,
                         borderColor: 'rgba(103, 126, 234, 1)',
                         backgroundColor: 'rgba(103, 126, 234, 0.1)',
                         tension: 0.4,
@@ -329,25 +331,48 @@
         }
 
         // Update statistics
-        function updateStats() {
-            // Mock data - in production, fetch from API
-            const consumoTotal = (Math.random() * 50 + 20).toFixed(1);
-            const consumoMedio = (Math.random() * 2000 + 1000).toFixed(0);
-            const taxaAtual = (Math.random() * 200 + 50).toFixed(0);
-            const picoConsumo = (Math.random() * 300 + 100).toFixed(0);
-
-            document.getElementById('consumoTotal').textContent = `${consumoTotal} m³`;
-            document.getElementById('consumoMedio').textContent = `${consumoMedio} L/dia`;
-            document.getElementById('taxaAtual').textContent = `${taxaAtual} L/h`;
-            document.getElementById('picoConsumo').textContent = `${picoConsumo} L/h`;
-
-            // Update changes
-            const change = (Math.random() * 20 - 10).toFixed(1);
-            const changeEl = document.getElementById('consumoChange');
-            changeEl.textContent = `${change > 0 ? '▲' : '▼'} ${Math.abs(change)}% vs ontem`;
-            changeEl.className = change > 0 ? 'change positive' : 'change negative';
-
-            document.getElementById('picoHorario').textContent = `às ${Math.floor(Math.random() * 24)}:00`;
+        async function updateStats() {
+            try {
+                if (!window.apiService) {
+                    console.warn('[Consumo] API Service não disponível');
+                    return;
+                }
+                
+                // Buscar estatísticas do backend
+                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
+                const statsResponse = await fetch(`${baseURL}/stats/daily`);
+                const stats = await statsResponse.json();
+                
+                if (stats.success && stats.data) {
+                    const data = stats.data;
+                    document.getElementById('consumoTotal').textContent = `${(data.total_consumption || 0).toFixed(1)} m³`;
+                    document.getElementById('consumoMedio').textContent = `${(data.avg_daily || 0).toFixed(0)} L/dia`;
+                    document.getElementById('taxaAtual').textContent = `${(data.current_rate || 0).toFixed(0)} L/h`;
+                    document.getElementById('picoConsumo').textContent = `${(data.peak_consumption || 0).toFixed(0)} L/h`;
+                    
+                    if (data.peak_hour !== undefined) {
+                        document.getElementById('picoHorario').textContent = `às ${data.peak_hour}:00`;
+                    }
+                    
+                    // Update changes
+                    const change = data.change_percent || 0;
+                    const changeEl = document.getElementById('consumoChange');
+                    changeEl.textContent = `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}% vs ontem`;
+                    changeEl.className = change > 0 ? 'change positive' : 'change negative';
+                } else {
+                    // Fallback: calcular a partir das leituras
+                    const readings = await window.apiService.getLatestReadings();
+                    if (readings) {
+                        let total = 0;
+                        Object.values(readings).forEach(r => {
+                            if (r.distance_cm) total += r.distance_cm;
+                        });
+                        document.getElementById('consumoTotal').textContent = `${(total / 100).toFixed(1)} m³`;
+                    }
+                }
+            } catch (error) {
+                console.error('[Consumo] Erro ao atualizar estatísticas:', error);
+            }
         }
 
         function setPeriod(period) {
@@ -371,23 +396,113 @@
             updateCharts();
         }
 
-        function updateCharts() {
+        async function updateCharts() {
             // Update chart data based on selected period
-            // In production, fetch from API
-            updateStats();
+            try {
+                const period = currentPeriod === 'day' ? '24h' : currentPeriod === 'week' ? '7d' : '30d';
+                const hourlyData = await fetchHourlyConsumption();
+                const dailyData = await fetchDailyConsumption(period === '24h' ? 1 : period === '7d' ? 7 : 30);
+                
+                if (charts.consumoHorario) {
+                    charts.consumoHorario.data.datasets[0].data = hourlyData;
+                    charts.consumoHorario.update();
+                }
+                
+                if (charts.tendencia) {
+                    charts.tendencia.data.labels = dailyData.labels;
+                    charts.tendencia.data.datasets[0].data = dailyData.values;
+                    charts.tendencia.update();
+                }
+                
+                updateStats();
+            } catch (error) {
+                console.error('[Consumo] Erro ao atualizar gráficos:', error);
+            }
         }
 
-        // Helper functions for mock data
-        function generateMockHourlyData() {
-            return Array.from({length: 24}, () => Math.floor(Math.random() * 500 + 100));
+        // Fetch real data from API
+        async function fetchHourlyConsumption() {
+            try {
+                if (!window.apiService) {
+                    console.warn('[Consumo] API Service não disponível, usando dados vazios');
+                    return Array(24).fill(0);
+                }
+                
+                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
+                const response = await fetch(`${baseURL}/stats/consumption?period=24h&group_by=hour`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    // Processar dados por hora
+                    const hourlyData = Array(24).fill(0);
+                    result.data.forEach(item => {
+                        const hour = new Date(item.period).getHours();
+                        hourlyData[hour] = parseFloat(item.avg_value || 0);
+                    });
+                    return hourlyData;
+                }
+                
+                return Array(24).fill(0);
+            } catch (error) {
+                console.error('[Consumo] Erro ao buscar consumo horário:', error);
+                return Array(24).fill(0);
+            }
         }
 
-        function generateMockDailyData(days) {
-            return Array.from({length: days}, () => (Math.random() * 30 + 20).toFixed(1));
+        async function fetchDailyConsumption(days = 7) {
+            try {
+                if (!window.apiService) {
+                    console.warn('[Consumo] API Service não disponível, usando dados vazios');
+                    return { labels: generateDayLabels(days), values: Array(days).fill(0) };
+                }
+                
+                const period = days === 1 ? '24h' : days === 7 ? '7d' : '30d';
+                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
+                const response = await fetch(`${baseURL}/stats/consumption?period=${period}&group_by=day`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const labels = [];
+                    const values = [];
+                    
+                    result.data.forEach(item => {
+                        const date = new Date(item.period);
+                        labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+                        values.push(parseFloat(item.avg_value || 0));
+                    });
+                    
+                    return { labels, values };
+                }
+                
+                return { labels: generateDayLabels(days), values: Array(days).fill(0) };
+            } catch (error) {
+                console.error('[Consumo] Erro ao buscar consumo diário:', error);
+                return { labels: generateDayLabels(days), values: Array(days).fill(0) };
+            }
         }
 
-        function generateMockMonthlyData() {
-            return Array.from({length: 12}, () => (Math.random() * 800 + 400).toFixed(0));
+        async function fetchReservoirConsumption() {
+            try {
+                if (!window.apiService) {
+                    return [0, 0, 0, 0, 0];
+                }
+                
+                const readings = await window.apiService.getLatestReadings();
+                if (!readings) return [0, 0, 0, 0, 0];
+                
+                // Calcular consumo baseado na diferença de volume
+                const consumption = ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'].map(id => {
+                    const reading = readings[id];
+                    if (!reading) return 0;
+                    // Simplificado: usar volume atual como indicador
+                    return reading.distance_cm || 0;
+                });
+                
+                return consumption;
+            } catch (error) {
+                console.error('[Consumo] Erro ao buscar consumo por reservatório:', error);
+                return [0, 0, 0, 0, 0];
+            }
         }
 
         function generateDayLabels(days) {
@@ -401,8 +516,12 @@
         }
 
         // Initialize
-        initCharts();
-        updateStats();
+        async function init() {
+            await initCharts();
+            await updateStats();
+        }
+        
+        init();
     </script>
 </body>
 </html>

@@ -101,7 +101,7 @@ app.use((err, req, res, next) => {
 import http from 'http';
 import { initWebSocket } from './websocket/wsHandler.js';
 import SerialBridge from './services/serial-bridge.js';
-import { readingsWorker } from './services/queue.service.js';
+import { initializeQueue, getReadingsWorker } from './services/queue.service.js';
 import alertService from './services/alert.service.js';
 
 async function startServer() {
@@ -115,8 +115,8 @@ async function startServer() {
     // Connect to Redis
     await connectRedis();
     
-    // Queue worker já está inicializado ao importar queue.service.js
-    logger.info('✅ Queue worker inicializado');
+    // Inicializar queue worker (pode falhar silenciosamente se Redis não estiver disponível)
+    await initializeQueue();
     
     // Iniciar sistema de alertas
     alertService.startMonitoring(60000); // Verificar a cada 1 minuto
@@ -163,8 +163,11 @@ async function gracefulShutdown() {
   logger.info('Sistema de alertas encerrado');
   
   // Fechar worker da fila
-  await readingsWorker.close();
-  logger.info('Queue worker encerrado');
+  const readingsWorker = getReadingsWorker();
+  if (readingsWorker) {
+    await readingsWorker.close();
+    logger.info('Queue worker encerrado');
+  }
   
   process.exit(0);
 }
