@@ -136,10 +136,10 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
 }
 
 // ============================================================================
-// PACKET PROCESSING TASK (Process queue)
+// HTTP POST TASK (Process queue and forward to backend)
 // ============================================================================
 
-static void packet_processing_task(void *pvParameters) {
+static void http_post_task(void *pvParameters) {
     espnow_packet_t packet;
     
     while (1) {
@@ -506,8 +506,8 @@ void app_main(void) {
     // Create heartbeat task
     xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 5, NULL);
 
-    // Create packet processing task (HTTP POST)
-    xTaskCreate(packet_processing_task, "packet_proc", 4096, NULL, 5, NULL);
+    // Create HTTP POST task (process queue and forward data)
+    xTaskCreate(http_post_task, "http_post", 4096, NULL, 5, NULL);
 
     // Create metrics task (send metrics periodically)
     xTaskCreate(metrics_task, "metrics", 4096, NULL, 3, NULL);

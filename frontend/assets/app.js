@@ -135,15 +135,52 @@ function updateConnectivityStatus(options = {}) {
 }
 
 /**
- * Format distance to volume percentage
+ * Get reservoir configuration from reservoirs.json
+ */
+function getReservoirConfig(sensorId) {
+    // Mapeamento direto dos IDs
+    const reservoirs = {
+        'RCON': { tipo: 'cilindrico', altura_cm: 400, diametro_cm: 510, area_m2: 20.43, volume_max_m3: 81.7 },
+        'RCAV': { tipo: 'cilindrico', altura_cm: 400, diametro_cm: 510, area_m2: 20.43, volume_max_m3: 81.7 },
+        'RB03': { tipo: 'cilindrico', altura_cm: 400, diametro_cm: 510, area_m2: 20.43, volume_max_m3: 81.7 },
+        'IE01': { tipo: 'retangular', altura_cm: 240, comprimento_cm: 585, largura_cm: 1810, area_m2: 105.885, volume_max_m3: 254.124 },
+        'IE02': { tipo: 'retangular', altura_cm: 240, comprimento_cm: 585, largura_cm: 1810, area_m2: 105.885, volume_max_m3: 254.124 }
+    };
+    return reservoirs[sensorId] || null;
+}
+
+/**
+ * Calculate volume in m³ from distance measurement
+ * Volume = área_base × (nível_máximo - distância_medida)
+ */
+function calculateVolumeM3(sensorId, distance_cm) {
+    const reservoir = getReservoirConfig(sensorId);
+    if (!reservoir || !distance_cm || distance_cm <= 0) return 0;
+    
+    // Nível da água = altura máxima - distância medida
+    const nivel_cm = reservoir.altura_cm - distance_cm;
+    if (nivel_cm <= 0) return 0;
+    
+    // Volume = área_base × (nível_cm / 100) para converter para metros
+    const volume_m3 = reservoir.area_m2 * (nivel_cm / 100);
+    
+    // Limitar ao volume máximo
+    return Math.min(volume_m3, reservoir.volume_max_m3);
+}
+
+/**
+ * Calculate volume percentage
+ * Percentual = (volume_atual / volume_total) × 100
  */
 function getVolumePercent(sensorId, distance_cm) {
-    const sensor = SENSORS[sensorId];
-    if (!sensor) return 0;
+    const reservoir = getReservoirConfig(sensorId);
+    if (!reservoir || !distance_cm || distance_cm <= 0) return 0;
     
-    const level = (distance_cm / (sensor.height * 100)) * 100;
-    const volumePercent = 100 - (level > 100 ? 100 : level < 0 ? 0 : level);
-    return volumePercent;
+    const volume_atual = calculateVolumeM3(sensorId, distance_cm);
+    const volume_total = reservoir.volume_max_m3;
+    
+    const percentual = (volume_atual / volume_total) * 100;
+    return Math.max(0, Math.min(100, percentual)); // Limitar entre 0 e 100
 }
 
 /**
