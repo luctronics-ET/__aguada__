@@ -1,6 +1,8 @@
-import { pool } from '../config/database.js';
+import pool from '../config/database.js';
 import logger from '../config/logger.js';
 import { getClientsCount } from '../websocket/wsHandler.js';
+import metricsService from '../services/metrics.service.js';
+import alertService from '../services/alert.service.js';
 import os from 'os';
 
 /**
@@ -111,11 +113,15 @@ export async function getSystemLogs(req, res) {
 
 /**
  * GET /api/system/metrics
- * Get system performance metrics
+ * Get system performance metrics (completo com métricas de aplicação)
  */
 export async function getSystemMetrics(req, res) {
   try {
-    const metrics = {
+    // Obter métricas de aplicação
+    const appMetrics = await metricsService.getMetrics();
+
+    // Métricas de sistema
+    const systemMetrics = {
       timestamp: new Date().toISOString(),
       process: {
         pid: process.pid,
@@ -127,7 +133,7 @@ export async function getSystemMetrics(req, res) {
         hostname: os.hostname(),
         platform: os.platform(),
         arch: os.arch(),
-        cpus: os.cpus(),
+        cpus: os.cpus().length,
         loadavg: os.loadavg(),
         totalMemory: os.totalmem(),
         freeMemory: os.freemem(),
@@ -137,13 +143,55 @@ export async function getSystemMetrics(req, res) {
 
     res.status(200).json({
       success: true,
-      data: metrics
+      data: {
+        ...systemMetrics,
+        application: appMetrics
+      }
     });
   } catch (error) {
     logger.error('Error getting system metrics:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao obter métricas do sistema'
+    });
+  }
+}
+
+/**
+ * GET /api/system/alerts
+ * Get current system alerts
+ */
+export async function getSystemAlerts(req, res) {
+  try {
+    const { history = false, limit = 50 } = req.query;
+
+    if (history === 'true') {
+      // Retornar histórico de alertas
+      const alertHistory = alertService.getHistory(parseInt(limit));
+      const stats = alertService.getStats();
+
+      res.status(200).json({
+        success: true,
+        history: alertHistory,
+        stats,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Retornar alertas atuais
+      const alerts = await metricsService.checkAlerts();
+
+      res.status(200).json({
+        success: true,
+        count: alerts.length,
+        alerts,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    logger.error('Error getting system alerts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao obter alertas do sistema'
     });
   }
 }
@@ -179,5 +227,6 @@ export default {
   getSystemHealth,
   getSystemLogs,
   getSystemMetrics,
-  restartSystem
+  getSystemAlerts,
+  restartSystem,
 };

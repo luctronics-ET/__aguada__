@@ -3,6 +3,10 @@ import logger from '../config/logger.js';
 
 let wss = null;
 const clients = new Set();
+let readingsBuffer = [];
+let broadcastTimer = null;
+const BATCH_INTERVAL_MS = 200; // agrupar leituras rápidas
+const MAX_BATCH_SIZE = 10;
 
 /**
  * Initialize WebSocket server
@@ -10,7 +14,19 @@ const clients = new Set();
 export function initWebSocket(server) {
   wss = new WebSocketServer({ 
     server,
-    path: '/ws'
+    path: '/ws',
+    perMessageDeflate: {
+      zlibDeflateOptions: {
+        chunkSize: 1024,
+        level: 6,
+        memLevel: 8,
+      },
+      clientNoContextTakeover: true,
+      serverNoContextTakeover: true,
+      serverMaxWindowBits: 10,
+      concurrencyLimit: 10,
+      threshold: 1024, // compress only >1KB
+    },
   });
 
   wss.on('connection', (ws, req) => {
@@ -81,7 +97,7 @@ export function broadcast(data) {
 
   clients.forEach((client) => {
     if (client.readyState === client.OPEN) {
-      client.send(message);
+      client.send(message, { compress: true });
       sent++;
     }
   });
@@ -93,11 +109,35 @@ export function broadcast(data) {
  * Broadcast new telemetry reading
  */
 export function broadcastReading(reading) {
-  broadcast({
-    type: 'reading',
-    data: reading,
-    timestamp: new Date().toISOString()
-  });
+  readingsBuffer.push(reading);
+
+  const flushBuffer = () => {
+    if (readingsBuffer.length === 0) return;
+
+    const batch = readingsBuffer.slice(0, MAX_BATCH_SIZE);
+    readingsBuffer = readingsBuffer.slice(batch.length);
+
+    broadcast({
+      type: batch.length === 1 ? 'reading' : 'readings_batch',
+      data: batch.length === 1 ? batch[0] : batch,
+      count: batch.length,
+      timestamp: new Date().toISOString()
+    });
+
+    if (readingsBuffer.length > 0) {
+      broadcastTimer = setTimeout(flushBuffer, BATCH_INTERVAL_MS);
+    } else {
+      broadcastTimer = null;
+    }
+  };
+
+  if (!broadcastTimer) {
+    broadcastTimer = setTimeout(flushBuffer, BATCH_INTERVAL_MS);
+  } else if (readingsBuffer.length >= MAX_BATCH_SIZE) {
+    clearTimeout(broadcastTimer);
+    broadcastTimer = null;
+    flushBuffer();
+  }
 }
 
 /**

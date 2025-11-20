@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import apiRoutes from './routes/api.routes.js';
 import { testConnection } from './config/database.js';
 import { connectRedis } from './config/redis.js';
+import metricsMiddleware from './middleware/metrics.middleware.js';
 import logger from './config/logger.js';
 
 dotenv.config();
@@ -40,6 +41,9 @@ const limiter = rateLimit({
 });
 
 app.use('/api/', limiter);
+
+// Metrics middleware (deve vir antes do logger para capturar todas as requisições)
+app.use(metricsMiddleware);
 
 // Request logger
 app.use((req, res, next) => {
@@ -97,6 +101,8 @@ app.use((err, req, res, next) => {
 import http from 'http';
 import { initWebSocket } from './websocket/wsHandler.js';
 import SerialBridge from './services/serial-bridge.js';
+import { readingsWorker } from './services/queue.service.js';
+import alertService from './services/alert.service.js';
 
 async function startServer() {
   try {
@@ -108,6 +114,13 @@ async function startServer() {
     
     // Connect to Redis
     await connectRedis();
+    
+    // Queue worker já está inicializado ao importar queue.service.js
+    logger.info('✅ Queue worker inicializado');
+    
+    // Iniciar sistema de alertas
+    alertService.startMonitoring(60000); // Verificar a cada 1 minuto
+    logger.info('✅ Sistema de alertas iniciado');
     
     // Create HTTP server
     const server = http.createServer(app);
@@ -142,15 +155,22 @@ async function startServer() {
 }
 
 // Handle graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM recebido, encerrando servidor...');
+async function gracefulShutdown() {
+  logger.info('Encerrando servidor graciosamente...');
+  
+  // Parar sistema de alertas
+  alertService.stopMonitoring();
+  logger.info('Sistema de alertas encerrado');
+  
+  // Fechar worker da fila
+  await readingsWorker.close();
+  logger.info('Queue worker encerrado');
+  
   process.exit(0);
-});
+}
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT recebido, encerrando servidor...');
-  process.exit(0);
-});
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 // Start
 startServer();

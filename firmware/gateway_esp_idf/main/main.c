@@ -38,10 +38,14 @@
 #define WIFI_SSID "luciano"
 #define WIFI_PASS "Luciano19852012"
 #define BACKEND_URL "http://192.168.0.117:3000/api/telemetry"
+#define METRICS_URL "http://192.168.0.117:3000/api/gateway/metrics"
 #define ESPNOW_CHANNEL 11  // Fixed channel for SSID "luciano"
+#define METRICS_INTERVAL_MS 60000  // Enviar métricas a cada 60 segundos
 #define LED_BUILTIN GPIO_NUM_8
 #define HEARTBEAT_INTERVAL_MS 3000
 #define MAX_PAYLOAD_SIZE 256
+#define MAX_RETRY_ATTEMPTS 3
+#define RETRY_BACKOFF_BASE_MS 1000  // 1s, 2s, 4s
 
 // ============================================================================
 // TYPES
@@ -60,8 +64,27 @@ typedef struct {
 static uint8_t gateway_mac[6];
 static bool wifi_connected = false;
 static int64_t last_heartbeat = 0;
+static int64_t last_metrics_send = 0;
 static bool led_state = false;
 static QueueHandle_t espnow_queue = NULL;
+
+// Buffer para pacotes quando queue está cheia (fallback em memória)
+// TODO: Implementar SPIFFS/LittleFS para persistência real
+#define FALLBACK_BUFFER_SIZE 20
+static espnow_packet_t fallback_buffer[FALLBACK_BUFFER_SIZE];
+static int fallback_buffer_count = 0;
+
+// Métricas do gateway
+static struct {
+    uint32_t packets_received;      // Total de pacotes ESP-NOW recebidos
+    uint32_t packets_sent;          // Total de pacotes HTTP enviados com sucesso
+    uint32_t packets_failed;        // Total de pacotes HTTP que falharam
+    uint32_t packets_dropped;       // Total de pacotes descartados
+    uint32_t http_errors;           // Total de erros HTTP
+    uint32_t queue_full_count;      // Vezes que a queue ficou cheia
+    int64_t last_packet_time;       // Timestamp do último pacote recebido
+    int64_t last_success_time;      // Timestamp do último envio bem-sucedido
+} gateway_metrics = {0};
 
 // ============================================================================
 // UTILITIES
@@ -91,8 +114,25 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
     packet.payload[len] = '\0';
     packet.len = len;
 
+    // Atualizar métricas
+    gateway_metrics.packets_received++;
+    gateway_metrics.last_packet_time = esp_timer_get_time();
+    
     // Enqueue without blocking
-    xQueueSendFromISR(espnow_queue, &packet, NULL);
+    BaseType_t result = xQueueSendFromISR(espnow_queue, &packet, NULL);
+    
+    // Se queue cheia, tentar salvar em buffer de fallback
+    if (result != pdTRUE) {
+        gateway_metrics.queue_full_count++;
+        if (fallback_buffer_count < FALLBACK_BUFFER_SIZE) {
+            memcpy(&fallback_buffer[fallback_buffer_count], &packet, sizeof(espnow_packet_t));
+            fallback_buffer_count++;
+            ESP_LOGW(TAG, "Queue cheia - pacote salvo em buffer (total: %d)", fallback_buffer_count);
+        } else {
+            gateway_metrics.packets_dropped++;
+            ESP_LOGE(TAG, "Queue e buffer cheios - pacote descartado!");
+        }
+    }
 }
 
 // ============================================================================
@@ -122,32 +162,53 @@ static void packet_processing_task(void *pvParameters) {
                 continue;
             }
 
-            // Make HTTP POST request (timeout reduced to 3s to avoid blocking)
-            esp_http_client_config_t config = {
-                .url = BACKEND_URL,
-                .method = HTTP_METHOD_POST,
-                .timeout_ms = 3000,  // 3 seconds (reduced from 5s)
-            };
-            
-            esp_http_client_handle_t client = esp_http_client_init(&config);
-            if (client) {
-                esp_http_client_set_header(client, "Content-Type", "application/json");
-                esp_http_client_set_post_field(client, packet.payload, packet.len);
-                
-                esp_err_t err = esp_http_client_perform(client);
-                if (err == ESP_OK) {
-                    int status = esp_http_client_get_status_code(client);
-                    if (status == 200 || status == 201) {
-                        ESP_LOGI(TAG, "→ Enviado via HTTP (status=%d)", status);
-                    } else {
-                        ESP_LOGW(TAG, "✗ HTTP status=%d", status);
-                    }
-                } else {
-                    ESP_LOGW(TAG, "✗ HTTP error: %s", esp_err_to_name(err));
+            // Retry com backoff exponencial
+            bool success = false;
+            for (int attempt = 0; attempt < MAX_RETRY_ATTEMPTS && !success; attempt++) {
+                if (attempt > 0) {
+                    // Backoff exponencial: 1s, 2s, 4s
+                    int delay_ms = RETRY_BACKOFF_BASE_MS * (1 << (attempt - 1));
+                    ESP_LOGW(TAG, "Tentativa %d/%d após %dms...", attempt + 1, MAX_RETRY_ATTEMPTS, delay_ms);
+                    vTaskDelay(pdMS_TO_TICKS(delay_ms));
                 }
-                esp_http_client_cleanup(client);
-            } else {
-                ESP_LOGW(TAG, "✗ Falha ao criar cliente HTTP");
+
+                // Make HTTP POST request (timeout increased to 5s for better reliability)
+                esp_http_client_config_t config = {
+                    .url = BACKEND_URL,
+                    .method = HTTP_METHOD_POST,
+                    .timeout_ms = 5000,  // 5 seconds (increased for better reliability)
+                };
+                
+                esp_http_client_handle_t client = esp_http_client_init(&config);
+                if (client) {
+                    esp_http_client_set_header(client, "Content-Type", "application/json");
+                    esp_http_client_set_post_field(client, packet.payload, packet.len);
+                    
+                    esp_err_t err = esp_http_client_perform(client);
+                    if (err == ESP_OK) {
+                        int status = esp_http_client_get_status_code(client);
+                        if (status == 200 || status == 201) {
+                            gateway_metrics.packets_sent++;
+                            gateway_metrics.last_success_time = esp_timer_get_time();
+                            ESP_LOGI(TAG, "→ Enviado via HTTP (status=%d, tentativa %d)", status, attempt + 1);
+                            success = true;
+                        } else {
+                            gateway_metrics.http_errors++;
+                            ESP_LOGW(TAG, "✗ HTTP status=%d (tentativa %d)", status, attempt + 1);
+                        }
+                    } else {
+                        gateway_metrics.http_errors++;
+                        ESP_LOGW(TAG, "✗ HTTP error: %s (tentativa %d)", esp_err_to_name(err), attempt + 1);
+                    }
+                    esp_http_client_cleanup(client);
+                } else {
+                    ESP_LOGW(TAG, "✗ Falha ao criar cliente HTTP (tentativa %d)", attempt + 1);
+                }
+            }
+
+            if (!success) {
+                gateway_metrics.packets_failed++;
+                ESP_LOGE(TAG, "✗ Falha ao enviar após %d tentativas - pacote descartado", MAX_RETRY_ATTEMPTS);
             }
         }
     }
@@ -171,6 +232,25 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "✓ WiFi connected! IP: " IPSTR, IP2STR(&event->ip_info.ip));
         wifi_connected = true;
+        
+        // Tentar reenviar pacotes do buffer de fallback
+        if (fallback_buffer_count > 0) {
+            ESP_LOGI(TAG, "Reenviando %d pacotes do buffer...", fallback_buffer_count);
+            for (int i = 0; i < fallback_buffer_count; i++) {
+                // Tentar adicionar à queue novamente
+                if (xQueueSend(espnow_queue, &fallback_buffer[i], pdMS_TO_TICKS(100)) == pdTRUE) {
+                    fallback_buffer_count--;
+                    // Shift array
+                    for (int j = i; j < fallback_buffer_count; j++) {
+                        fallback_buffer[j] = fallback_buffer[j + 1];
+                    }
+                    i--; // Re-check this index
+                }
+            }
+            if (fallback_buffer_count > 0) {
+                ESP_LOGW(TAG, "%d pacotes ainda no buffer após reconexão", fallback_buffer_count);
+            }
+        }
     }
 }
 
@@ -311,6 +391,79 @@ static void heartbeat_task(void *pvParameters) {
 }
 
 // ============================================================================
+// METRICS TASK (Send metrics to backend periodically)
+// ============================================================================
+
+static void metrics_task(void *pvParameters) {
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(METRICS_INTERVAL_MS));
+        
+        if (!wifi_connected) {
+            continue;
+        }
+
+        // Calcular uso da queue
+        UBaseType_t queue_messages = uxQueueMessagesWaiting(espnow_queue);
+        int queue_usage_percent = (queue_messages * 100) / 50; // 50 é o tamanho da queue
+
+        // Preparar JSON de métricas
+        char metrics_json[512];
+        snprintf(metrics_json, sizeof(metrics_json),
+            "{"
+            "\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\","
+            "\"metrics\":{"
+            "\"packets_received\":%lu,"
+            "\"packets_sent\":%lu,"
+            "\"packets_failed\":%lu,"
+            "\"packets_dropped\":%lu,"
+            "\"http_errors\":%lu,"
+            "\"queue_full_count\":%lu,"
+            "\"queue_usage_percent\":%d,"
+            "\"wifi_connected\":%s,"
+            "\"last_packet_time\":%lld,"
+            "\"last_success_time\":%lld,"
+            "\"uptime_seconds\":%lld"
+            "}"
+            "}",
+            gateway_mac[0], gateway_mac[1], gateway_mac[2], gateway_mac[3], gateway_mac[4], gateway_mac[5],
+            gateway_metrics.packets_received,
+            gateway_metrics.packets_sent,
+            gateway_metrics.packets_failed,
+            gateway_metrics.packets_dropped,
+            gateway_metrics.http_errors,
+            gateway_metrics.queue_full_count,
+            queue_usage_percent,
+            wifi_connected ? "true" : "false",
+            gateway_metrics.last_packet_time / 1000000, // Converter para segundos
+            gateway_metrics.last_success_time / 1000000,
+            esp_timer_get_time() / 1000000
+        );
+
+        // Enviar métricas via HTTP POST
+        esp_http_client_config_t config = {
+            .url = METRICS_URL,
+            .method = HTTP_METHOD_POST,
+            .timeout_ms = 3000,
+        };
+        
+        esp_http_client_handle_t client = esp_http_client_init(&config);
+        if (client) {
+            esp_http_client_set_header(client, "Content-Type", "application/json");
+            esp_http_client_set_post_field(client, metrics_json, strlen(metrics_json));
+            
+            esp_err_t err = esp_http_client_perform(client);
+            if (err == ESP_OK) {
+                int status = esp_http_client_get_status_code(client);
+                if (status == 200 || status == 201) {
+                    ESP_LOGI(TAG, "✓ Métricas enviadas");
+                }
+            }
+            esp_http_client_cleanup(client);
+        }
+    }
+}
+
+// ============================================================================
 // APP MAIN
 // ============================================================================
 
@@ -323,13 +476,13 @@ void app_main(void) {
     ESP_LOGI(TAG, "╚═══════════════════════════════════════════════════════════╝");
     ESP_LOGI(TAG, "");
 
-    // Create packet queue
-    espnow_queue = xQueueCreate(10, sizeof(espnow_packet_t));
+    // Create packet queue (increased to 50 slots for better buffering)
+    espnow_queue = xQueueCreate(50, sizeof(espnow_packet_t));
     if (!espnow_queue) {
         ESP_LOGE(TAG, "Falha ao criar fila ESP-NOW");
         return;
     }
-    ESP_LOGI(TAG, "✓ Fila ESP-NOW criada (10 slots)");
+    ESP_LOGI(TAG, "✓ Fila ESP-NOW criada (50 slots)");
 
     // Initialize GPIO
     gpio_init();
@@ -355,6 +508,9 @@ void app_main(void) {
 
     // Create packet processing task (HTTP POST)
     xTaskCreate(packet_processing_task, "packet_proc", 4096, NULL, 5, NULL);
+
+    // Create metrics task (send metrics periodically)
+    xTaskCreate(metrics_task, "metrics", 4096, NULL, 3, NULL);
 
     // Keep main task alive
     while (1) {

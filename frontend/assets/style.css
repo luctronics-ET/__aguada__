@@ -475,3 +475,34 @@ button:disabled {
         gap: 15px;
     }
 }
+
+/* Offline banner */
+#offlineBanner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 16px;
+    background: #f97316;
+    color: #fff;
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    z-index: 2000;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+}
+
+body.offline #offlineBanner,
+body.cache-mode #offlineBanner {
+    transform: translateY(0);
+}
+
+body.cache-mode #offlineBanner {
+    background: #2563eb;
+}
+
+body.offline,
+body.cache-mode {
+    padding-top: 48px;
+}

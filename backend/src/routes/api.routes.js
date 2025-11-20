@@ -5,6 +5,7 @@ import sensorsController from '../controllers/sensors.controller.js';
 import alertsController from '../controllers/alerts.controller.js';
 import statsController from '../controllers/stats.controller.js';
 import systemController from '../controllers/system.controller.js';
+import gatewayController from '../controllers/gateway.controller.js';
 import exportService from '../services/export.service.js';
 
 const router = express.Router();
@@ -178,10 +179,32 @@ router.get('/system/logs', systemController.getSystemLogs);
 router.get('/system/metrics', systemController.getSystemMetrics);
 
 /**
+ * GET /api/system/alerts
+ * Get current system alerts
+ */
+router.get('/system/alerts', systemController.getSystemAlerts);
+
+/**
  * POST /api/system/restart
  * Restart system (admin only)
  */
 router.post('/system/restart', systemController.restartSystem);
+
+// ============================================================================
+// GATEWAY
+// ============================================================================
+
+/**
+ * POST /api/gateway/metrics
+ * Recebe métricas do gateway
+ */
+router.post('/gateway/metrics', gatewayController.receiveGatewayMetrics);
+
+/**
+ * GET /api/gateway/metrics
+ * Obtém métricas de todos os gateways
+ */
+router.get('/gateway/metrics', gatewayController.getGatewayMetrics);
 
 // ============================================================================
 // HEALTH

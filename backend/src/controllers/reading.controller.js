@@ -1,13 +1,44 @@
 import logger from '../config/logger.js';
 import pool from '../config/database.js';
+import cacheService from '../services/cache.service.js';
 
 /**
  * GET /api/readings/latest
  * Obter últimas leituras de todos os sensores (últimas 24h)
+ * Com cache Redis para otimização
  */
 export async function getLatestReadings(req, res) {
   try {
+    const cacheKey = 'readings:latest';
+    
+    // Tentar obter do cache primeiro
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      logger.debug('Leituras obtidas do cache');
+      return res.status(200).json({
+        success: true,
+        data: cached.data,
+        timestamp: cached.timestamp,
+        cached: true,
+      });
+    }
+
+    // Se não estiver no cache, buscar do banco
+    // Query otimizada usando DISTINCT ON para melhor performance
     const query = `
+      WITH latest_readings AS (
+        SELECT DISTINCT ON (sensor_id, variavel)
+          sensor_id,
+          elemento_id,
+          variavel,
+          valor,
+          unidade,
+          datetime,
+          fonte
+        FROM aguada.leituras_raw
+        WHERE datetime >= NOW() - INTERVAL '24 hours'
+        ORDER BY sensor_id, variavel, datetime DESC
+      )
       SELECT 
         s.sensor_id,
         s.nome_sensor,
@@ -19,15 +50,9 @@ export async function getLatestReadings(req, res) {
         r.datetime,
         r.fonte
       FROM aguada.sensores s
-      LEFT JOIN LATERAL (
-        SELECT variavel, valor, unidade, datetime, fonte
-        FROM aguada.leituras_raw
-        WHERE sensor_id = s.sensor_id
-        ORDER BY datetime DESC
-        LIMIT 1
-      ) r ON true
+      LEFT JOIN latest_readings r ON s.sensor_id = r.sensor_id
       WHERE s.ativo = true
-      ORDER BY s.elemento_id, s.sensor_id;
+      ORDER BY s.elemento_id, s.sensor_id, r.variavel;
     `;
 
     const result = await pool.query(query);
@@ -55,12 +80,21 @@ export async function getLatestReadings(req, res) {
       }
     });
 
+    const timestamp = new Date().toISOString();
+    
+    // Salvar no cache
+    await cacheService.set(cacheKey, {
+      data: readings,
+      timestamp,
+    });
+
     logger.info('Leituras mais recentes enviadas', { sensores: Object.keys(readings).length });
 
     return res.status(200).json({
       success: true,
       data: readings,
-      timestamp: new Date().toISOString(),
+      timestamp,
+      cached: false,
     });
 
   } catch (error) {

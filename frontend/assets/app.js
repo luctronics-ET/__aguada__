@@ -47,7 +47,7 @@ const SENSORS = {
 };
 
 // Global state
-let latestReadings = {
+let latestReadings = window.latestReadings || {
     'RCON': { distance_cm: 0, valve_in: 0, valve_out: 0, sound_in: 0, timestamp: null, battery: 0, rssi: 0 },
     'RCAV': { distance_cm: 0, valve_in: 0, valve_out: 0, sound_in: 0, timestamp: null, battery: 0, rssi: 0 },
     'RB03': { distance_cm: 0, valve_in: 0, valve_out: 0, sound_in: 0, timestamp: null, battery: 0, rssi: 0 },
@@ -61,6 +61,78 @@ window.SENSORS = SENSORS;
 
 let allReadings = [];
 let alerts = [];
+
+const offlineState = {
+    banner: null,
+    forceCache: false,
+};
+
+registerServiceWorker();
+setupOfflineHandlers();
+
+function registerServiceWorker() {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+            .then(() => console.log('[SW] Registrado com sucesso'))
+            .catch(error => console.warn('[SW] Falha ao registrar:', error));
+    });
+}
+
+function setupOfflineHandlers() {
+    if (typeof window === 'undefined') return;
+
+    const initBanner = () => {
+        if (offlineState.banner || !document.body) return;
+        const banner = document.createElement('div');
+        banner.id = 'offlineBanner';
+        banner.textContent = 'Modo offline: exibindo dados em cache';
+        document.body.appendChild(banner);
+        offlineState.banner = banner;
+        updateConnectivityStatus();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBanner);
+    } else {
+        initBanner();
+    }
+
+    window.addEventListener('online', () => updateConnectivityStatus());
+    window.addEventListener('offline', () => updateConnectivityStatus());
+}
+
+function updateConnectivityStatus(options = {}) {
+    if (typeof window === 'undefined' || !document.body) return;
+    const isOffline = !navigator.onLine;
+    const forceCache = options.forceCache ?? offlineState.forceCache;
+    offlineState.forceCache = forceCache;
+
+    document.body.classList.toggle('offline', isOffline);
+    document.body.classList.toggle('cache-mode', !isOffline && forceCache);
+
+    if (offlineState.banner) {
+        if (isOffline) {
+            offlineState.banner.textContent = 'Sem conexão. Exibindo dados em cache.';
+        } else if (forceCache) {
+            offlineState.banner.textContent = 'Backend indisponível. Exibindo dados armazenados.';
+        } else {
+            offlineState.banner.textContent = 'Conectado';
+        }
+    }
+
+    document.querySelectorAll('.status-badge').forEach(badge => {
+        if (isOffline || forceCache) {
+            badge.classList.remove('status-online');
+            badge.classList.add('status-offline');
+            badge.textContent = '● Offline';
+        } else {
+            badge.classList.remove('status-offline');
+            badge.classList.add('status-online');
+            badge.textContent = '● Online';
+        }
+    });
+}
 
 /**
  * Format distance to volume percentage
@@ -123,13 +195,23 @@ async function fetchLatestReadings() {
             
             // Disparar evento customizado
             window.dispatchEvent(new CustomEvent('readings-updated', { detail: readings }));
+
+            updateConnectivityStatus({
+                forceCache: window.apiService?.lastDataSource === 'offline-cache'
+            });
             
             return readings;
         }
         
+        updateConnectivityStatus({
+            forceCache: window.apiService?.lastDataSource === 'offline-cache'
+        });
         return null;
     } catch (error) {
         console.error('[App] Erro ao buscar leituras:', error);
+        updateConnectivityStatus({
+            forceCache: window.apiService?.lastDataSource === 'offline-cache'
+        });
         return null;
     }
 }

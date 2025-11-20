@@ -13,6 +13,10 @@ class ApiService {
     this.ws = null;
     this.wsReconnectInterval = null;
     this.wsCallbacks = [];
+    this.lastDataSource = 'network';
+    this.dbPromise = null;
+
+    this._initOfflineStore();
   }
 
   /**
@@ -94,15 +98,17 @@ class ApiService {
       
       // Normalizar formato para o frontend
       const normalized = this._normalizeReadings(data.data);
+      this.lastDataSource = 'network';
       console.log('[API] Dados normalizados:', normalized);
       return normalized;
     } catch (error) {
       console.error('[API] Erro ao buscar leituras:', error);
       
       // Fallback: retornar cache ou dados vazios
-      const cached = this._getCachedReadings();
+      const cached = await this._getCachedReadings();
       if (cached) {
-        console.warn('[API] Usando dados do cache');
+        this.lastDataSource = 'offline-cache';
+        console.warn('[API] Usando dados do cache offline');
         return cached;
       }
       
@@ -264,6 +270,22 @@ class ApiService {
    * Cache leituras no localStorage
    */
   _cacheReadings(readings) {
+    this._saveOfflineReadings(readings).catch((error) => {
+      console.warn('[Offline] Erro ao salvar em IndexedDB:', error);
+    });
+
+    this._setLocalCache(readings);
+  }
+
+  async _getCachedReadings() {
+    const offline = await this._getOfflineReadings();
+    if (offline) {
+      return offline;
+    }
+    return this._getLocalCache();
+  }
+
+  _setLocalCache(readings) {
     try {
       localStorage.setItem('aguada_readings_cache', JSON.stringify({
         data: readings,
@@ -274,23 +296,83 @@ class ApiService {
     }
   }
 
-  /**
-   * Recupera leituras do cache
-   */
-  _getCachedReadings() {
+  _getLocalCache() {
     try {
       const cached = localStorage.getItem('aguada_readings_cache');
       if (!cached) return null;
 
       const { data, timestamp } = JSON.parse(cached);
-      
-      // Cache expira em 5 minutos
       if (Date.now() - timestamp > 5 * 60 * 1000) {
         return null;
       }
-
       return data;
     } catch (error) {
+      return null;
+    }
+  }
+
+  _initOfflineStore() {
+    if (typeof window === 'undefined' || !('indexedDB' in window)) {
+      console.warn('[Offline] IndexedDB não suportado neste navegador');
+      return;
+    }
+
+    this.dbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open('aguada_offline', 1);
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('latest_readings')) {
+          db.createObjectStore('latest_readings', { keyPath: 'id' });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    }).catch((error) => {
+      console.warn('[Offline] Falha ao iniciar IndexedDB:', error);
+      return null;
+    });
+  }
+
+  async _saveOfflineReadings(readings) {
+    if (!this.dbPromise) return;
+    try {
+      const db = await this.dbPromise;
+      if (!db) return;
+      const tx = db.transaction(['latest_readings'], 'readwrite');
+      const store = tx.objectStore('latest_readings');
+      store.put({ id: 'latest', data: readings, timestamp: Date.now() });
+
+      return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } catch (error) {
+      console.warn('[Offline] Erro ao salvar IndexedDB:', error);
+    }
+  }
+
+  async _getOfflineReadings() {
+    if (!this.dbPromise) return null;
+    try {
+      const db = await this.dbPromise;
+      if (!db) return null;
+
+      const tx = db.transaction(['latest_readings'], 'readonly');
+      const store = tx.objectStore('latest_readings');
+      const request = store.get('latest');
+
+      return await new Promise((resolve, reject) => {
+        request.onsuccess = () => {
+          const result = request.result;
+          resolve(result ? result.data : null);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.warn('[Offline] Erro ao ler IndexedDB:', error);
       return null;
     }
   }

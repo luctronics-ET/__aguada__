@@ -2,6 +2,10 @@ import { validateTelemetry, validateIndividualTelemetry, validateManualReading, 
 import sensorService from '../services/sensor.service.js';
 import readingService from '../services/reading.service.js';
 import compressionService from '../services/compression.service.js';
+import cacheService from '../services/cache.service.js';
+import queueService from '../services/queue.service.js';
+import duplicateService from '../services/duplicate.service.js';
+import metricsService from '../services/metrics.service.js';
 import logger from '../config/logger.js';
 import { broadcastReading } from '../websocket/wsHandler.js';
 
@@ -13,16 +17,43 @@ import { broadcastReading } from '../websocket/wsHandler.js';
  * 2. Agregado: {"node_mac":"...","datetime":"...","data":[...],"meta":{...}}
  */
 export async function receiveTelemetry(req, res) {
+  const startTime = Date.now();
+  
   try {
+    // Registrar recebimento de telemetria
+    metricsService.recordTelemetryReceived();
+    
     // Detectar formato baseado na presença do campo 'mac' vs 'node_mac'
     const isIndividualFormat = 'mac' in req.body && 'type' in req.body;
     
+    let result;
     if (isIndividualFormat) {
-      return await receiveIndividualTelemetry(req, res);
+      result = await receiveIndividualTelemetry(req, res);
     } else {
-      return await receiveAggregatedTelemetry(req, res);
+      result = await receiveAggregatedTelemetry(req, res);
     }
+    
+    // Registrar latência
+    const latency = Date.now() - startTime;
+    metricsService.recordLatency(latency);
+    metricsService.recordEndpointRequest('POST', '/api/telemetry', res.statusCode || 200, latency);
+    
+    // Registrar processamento bem-sucedido
+    if (res.statusCode < 400) {
+      metricsService.recordTelemetryProcessed();
+    } else {
+      metricsService.recordTelemetryFailed();
+    }
+    
+    return result;
   } catch (error) {
+    // Registrar erro
+    const latency = Date.now() - startTime;
+    metricsService.recordLatency(latency);
+    metricsService.recordEndpointRequest('POST', '/api/telemetry', 500, latency);
+    metricsService.recordTelemetryFailed();
+    metricsService.recordError('telemetry_error', error.message);
+    
     logger.error('Erro ao receber telemetria:', error);
     return res.status(500).json({
       success: false,
@@ -79,6 +110,22 @@ async function receiveIndividualTelemetry(req, res) {
     
     const datetime = new Date();
     
+    // Verificar duplicata antes de inserir
+    const isDup = await duplicateService.isDuplicate(sensor.sensor_id, datetime, valorReal);
+    if (isDup) {
+      logger.warn('Leitura duplicada ignorada', {
+        sensor_id: sensor.sensor_id,
+        type,
+        valor: valorReal,
+      });
+      return res.status(200).json({
+        success: true,
+        message: 'Leitura duplicada ignorada',
+        sensor_id: sensor.sensor_id,
+        duplicate: true,
+      });
+    }
+    
     // Inserir leitura bruta
     await readingService.insertRawReading({
       sensor_id: sensor.sensor_id,
@@ -100,17 +147,32 @@ async function receiveIndividualTelemetry(req, res) {
       datetime,
     });
     
-    // Processar compressão assíncrona (apenas para distance_cm)
-    if (type === 'distance_cm') {
-      compressionService.processCompression(
-        sensor,
-        valorReal,
-        sensor.elemento_parametros,
-        datetime
-      ).catch(err => {
-        logger.error('Erro no processamento assíncrono:', err);
-      });
-    }
+    // Adicionar à fila para processamento assíncrono (não bloqueia API)
+    queueService.enqueueReading({
+      sensor,
+      valorReal,
+      elementoParametros: sensor.elemento_parametros,
+      datetime,
+      type,
+    }).catch(err => {
+      logger.error('Erro ao adicionar leitura à fila:', err);
+      // Fallback: processar diretamente se a fila falhar
+      if (type === 'distance_cm') {
+        compressionService.processCompression(
+          sensor,
+          valorReal,
+          sensor.elemento_parametros,
+          datetime
+        ).catch(compErr => {
+          logger.error('Erro no processamento de fallback:', compErr);
+        });
+      }
+    });
+    
+    // Invalidar cache de leituras (assíncrono, não bloqueia)
+    cacheService.invalidateReadings().catch(err => {
+      logger.warn('Erro ao invalidar cache:', err);
+    });
     
     logger.info('Telemetria individual recebida', {
       mac,
@@ -184,14 +246,24 @@ async function receiveAggregatedTelemetry(req, res) {
         datetime: new Date(datetime),
       });
       
-      // Processar compressão assíncrona
-      compressionService.processCompression(
+      // Adicionar à fila para processamento assíncrono
+      queueService.enqueueReading({
         sensor,
-        value,
-        sensor.elemento_parametros,
-        new Date(datetime)
-      ).catch(err => {
-        logger.error('Erro no processamento assíncrono:', err);
+        valorReal: value,
+        elementoParametros: sensor.elemento_parametros,
+        datetime: new Date(datetime),
+        type: label,
+      }).catch(err => {
+        logger.error('Erro ao adicionar leitura à fila:', err);
+        // Fallback: processar diretamente
+        compressionService.processCompression(
+          sensor,
+          value,
+          sensor.elemento_parametros,
+          new Date(datetime)
+        ).catch(compErr => {
+          logger.error('Erro no processamento de fallback:', compErr);
+        });
       });
       
       processedReadings.push({
@@ -209,6 +281,11 @@ async function receiveAggregatedTelemetry(req, res) {
         datetime: datetime
       });
     }
+    
+    // Invalidar cache de leituras
+    cacheService.invalidateReadings().catch(err => {
+      logger.warn('Erro ao invalidar cache:', err);
+    });
     
     logger.info('Telemetria recebida', {
       node_mac,

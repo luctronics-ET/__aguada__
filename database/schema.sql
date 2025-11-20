@@ -138,6 +138,21 @@ CREATE INDEX idx_leituras_raw_sensor_datetime ON leituras_raw(sensor_id, datetim
 CREATE INDEX idx_leituras_raw_elemento_datetime ON leituras_raw(elemento_id, datetime DESC);
 CREATE INDEX idx_leituras_raw_processed ON leituras_raw(processed) WHERE NOT processed;
 
+-- Índices otimizados para queries frequentes (Fase 1 - Melhorias)
+-- Índice parcial para últimas 24h (otimiza getLatestReadings)
+CREATE INDEX IF NOT EXISTS idx_leituras_raw_latest 
+ON leituras_raw(sensor_id, variavel, datetime DESC) 
+WHERE datetime >= NOW() - INTERVAL '24 hours';
+
+-- Índice composto para queries de leituras não processadas
+CREATE INDEX IF NOT EXISTS idx_leituras_raw_processed_datetime 
+ON leituras_raw(processed, datetime) 
+WHERE processed = false;
+
+-- Índice para queries por sensor e variável (otimiza histórico)
+CREATE INDEX IF NOT EXISTS idx_leituras_raw_sensor_variavel_datetime 
+ON leituras_raw(sensor_id, variavel, datetime DESC);
+
 -- Leituras processadas (APENAS mudanças significativas)
 CREATE TABLE leituras_processadas (
   proc_id BIGSERIAL,
