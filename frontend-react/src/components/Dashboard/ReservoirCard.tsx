@@ -1,5 +1,5 @@
 import { Card, CardContent, Typography, Box, Chip, LinearProgress } from '@mui/material';
-import { Water, WaterDrop, PowerSettingsNew, VolumeUp } from '@mui/icons-material';
+import { Water, PowerSettingsNew, VolumeUp } from '@mui/icons-material';
 import type { TelemetryReading } from '../../types/telemetry.types';
 import type { Reservoir } from '../../types/reservoir.types';
 import { calculateVolume, calculatePercentage, getLevelColor } from '../../utils/calculations';

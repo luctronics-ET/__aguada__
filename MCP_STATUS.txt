@@ -1,0 +1,131 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   🎉 AGUADA - MCP CONFIGURATION COMPLETE                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 Data: $(date '+%d/%m/%Y %H:%M:%S')
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ CONFIGURAÇÕES APLICADAS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. MCP Configuration Files:
+   ✓ .vscode/mcp.json            - VS Code MCP config
+   ✓ .cursor/mcp.json            - Cursor MCP config
+   ✓ .vscode/settings.json       - MCP enabled + Edge DevTools
+   ✓ .vscode/launch.json         - Debug configs (Edge, Firefox, Backend)
+
+2. MCP Servers (5 total):
+   ✓ AGUADA MCP          - Custom tools for hydraulic monitoring
+   ✓ Figma Remote MCP    - Cloud-based design access
+   ✓ Figma Desktop MCP   - Local Figma app integration
+   ✓ Filesystem MCP      - Workspace file access
+   ✓ PostgreSQL MCP      - Direct database queries
+
+3. Docker Services:
+   ✓ PostgreSQL (TimescaleDB) - Port 5433 - HEALTHY
+   ✓ Redis                    - Port 6379 - HEALTHY
+
+4. Documentation:
+   ✓ .vscode/MCP_SETUP.md     - Complete guide
+   ✓ mcp-server/README.md     - AGUADA MCP docs
+   ✓ test-mcp.sh              - Test script
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 ACTIVATION STEPS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Reload VS Code
+   Press: Ctrl+Shift+P (⌘⇧P on Mac)
+   Type: "Developer: Reload Window"
+   Hit Enter
+
+STEP 2: Verify MCP in Chat
+   Open Chat: Ctrl+Alt+B (⌥⌘B on Mac)
+   Switch to: Agent mode
+   Type: #get_design_context
+   
+   If tools appear, MCP is active! ✅
+
+STEP 3: Test AGUADA MCP
+   In chat: @workspace Use aguada MCP to get system overview
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 QUICK COMMANDS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Test MCP:
+   ./test-mcp.sh
+
+Start/Stop Docker:
+   docker compose up -d postgres redis
+   docker compose down
+
+View Logs:
+   Backend:  tail -f /tmp/aguada-backend.log
+   Frontend: tail -f /tmp/aguada-vite.log
+   Docker:   docker logs aguada-postgres
+
+Access Services:
+   Frontend: http://localhost:3001
+   Backend:  http://localhost:3000/api/health
+   Database: docker exec -it aguada-postgres psql -U aguada_user -d aguada_db
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 EXAMPLE QUERIES FOR COPILOT CHAT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AGUADA System:
+   @workspace Use aguada MCP get_telemetry to show current readings
+   @workspace Use aguada MCP analyze_consumption for last 7 days
+   @workspace Use aguada MCP check_events to detect anomalies
+
+Database:
+   @workspace Use postgres MCP to SELECT * FROM elementos LIMIT 5;
+   @workspace Use postgres MCP to show latest sensor readings
+
+Figma:
+   #get_design_context
+   (Opens Figma design context in chat)
+
+Files:
+   @workspace Use filesystem MCP to read config/reservoirs.json
+   @workspace List all TypeScript files in frontend-react/src
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  TROUBLESHOOTING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MCP not showing in chat:
+   1. Check GitHub Copilot is enabled
+   2. Reload VS Code window (Ctrl+Shift+P → Reload)
+   3. Check .vscode/mcp.json exists
+   4. Run: ./test-mcp.sh
+
+Figma Desktop MCP not working:
+   1. Install Figma Desktop App
+   2. Enable MCP in Figma settings
+   3. Verify port 3845 is open: curl http://127.0.0.1:3845/mcp
+
+PostgreSQL MCP errors:
+   1. Start Docker: docker compose up -d postgres
+   2. Check health: docker compose ps
+   3. Test connection: docker exec aguada-postgres psql -U aguada_user -d aguada_db -c "SELECT 1;"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 DOCUMENTATION LINKS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Local:
+   - .vscode/MCP_SETUP.md (detailed guide)
+   - mcp-server/README.md (AGUADA MCP API)
+   - docs/RULES.md (system architecture)
+
+External:
+   - MCP Protocol: https://modelcontextprotocol.io/
+   - Figma MCP: https://www.figma.com/developers/mcp
+   - VS Code MCP: https://code.visualstudio.com/docs/copilot/copilot-mcp
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ✅ All MCP servers configured! Reload VS Code to activate.                 ║
+║  📖 Read: .vscode/MCP_SETUP.md for complete documentation                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝

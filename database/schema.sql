@@ -139,10 +139,9 @@ CREATE INDEX idx_leituras_raw_elemento_datetime ON leituras_raw(elemento_id, dat
 CREATE INDEX idx_leituras_raw_processed ON leituras_raw(processed) WHERE NOT processed;
 
 -- Índices otimizados para queries frequentes (Fase 1 - Melhorias)
--- Índice parcial para últimas 24h (otimiza getLatestReadings)
+-- Índice composto para queries recentes (sem função NOW() no predicado)
 CREATE INDEX IF NOT EXISTS idx_leituras_raw_latest 
-ON leituras_raw(sensor_id, variavel, datetime DESC) 
-WHERE datetime >= NOW() - INTERVAL '24 hours';
+ON leituras_raw(sensor_id, variavel, datetime DESC);
 
 -- Índice composto para queries de leituras não processadas
 CREATE INDEX IF NOT EXISTS idx_leituras_raw_processed_datetime 
@@ -421,6 +420,19 @@ SELECT add_retention_policy('leituras_raw', INTERVAL '180 days');
 
 -- Retenção de 2 anos para leituras_processadas
 SELECT add_retention_policy('leituras_processadas', INTERVAL '730 days');
+
+-- Habilitar compressão nas hypertables
+ALTER TABLE leituras_raw SET (
+  timescaledb.compress,
+  timescaledb.compress_segmentby = 'sensor_id,variavel',
+  timescaledb.compress_orderby = 'datetime DESC'
+);
+
+ALTER TABLE leituras_processadas SET (
+  timescaledb.compress,
+  timescaledb.compress_segmentby = 'elemento_id,variavel',
+  timescaledb.compress_orderby = 'data_inicio DESC'
+);
 
 -- Compressão automática após 7 dias
 SELECT add_compression_policy('leituras_raw', INTERVAL '7 days');

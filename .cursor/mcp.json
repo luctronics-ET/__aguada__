@@ -5,7 +5,52 @@
       "args": [
         "/home/luciano/Área de trabalho/aguada/mcp-server/dist/index.js"
       ],
-      "env": {}
+      "env": {
+        "AGUADA_CONFIG_PATH": "/home/luciano/Área de trabalho/aguada/config",
+        "AGUADA_DB_PATH": "/home/luciano/Área de trabalho/aguada/database",
+        "AGUADA_DOCS_PATH": "/home/luciano/Área de trabalho/aguada/docs"
+      }
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "huggingface": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@llmindset/hf-mcp-server"
+      ]
+    },
+    "markitdown": {
+      "command": "uvx",
+      "args": [
+        "markitdown-mcp"
+      ]
+    },
+    "figma": {
+      "type": "http",
+      "url": "https://mcp.figma.com/mcp"
+    },
+    "figma-desktop": {
+      "type": "http",
+      "url": "http://127.0.0.1:3845/mcp"
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/luciano/Área de trabalho/aguada"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://aguada_user:aguada_pass_2025@localhost:5433/aguada_db"
+      ]
     }
   }
 }

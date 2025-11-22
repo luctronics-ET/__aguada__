@@ -13,8 +13,8 @@
     "date-fns": "^2.30.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0",
-    "recharts": "^2.10.0",
+    "react-router-dom": "^6.30.2",
+    "recharts": "^2.15.4",
     "zustand": "^4.4.0"
   },
   "devDependencies": {

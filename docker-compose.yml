@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL com TimescaleDB
   postgres:
@@ -11,11 +9,10 @@ services:
       POSTGRES_DB: aguada_db
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./database/sample-data.sql:/docker-entrypoint-initdb.d/02-sample-data.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aguada_user -d aguada_db"]
       interval: 10s
