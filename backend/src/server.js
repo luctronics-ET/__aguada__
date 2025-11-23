@@ -3,6 +3,8 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import apiRoutes from './routes/api.routes.js';
 import { testConnection } from './config/database.js';
 import { connectRedis } from './config/redis.js';
@@ -10,6 +12,10 @@ import metricsMiddleware from './middleware/metrics.middleware.js';
 import logger from './config/logger.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,10 +64,15 @@ app.use((req, res, next) => {
 // ROUTES
 // =============================================================================
 
+// Servir arquivos estáticos do frontend (antes das rotas de API)
+const frontendPath = path.join(PROJECT_ROOT, 'frontend');
+app.use(express.static(frontendPath));
+
+// Rotas de API
 app.use('/api', apiRoutes);
 
-// Root endpoint
-app.get('/', (req, res) => {
+// API info endpoint (mantido para compatibilidade)
+app.get('/api/info', (req, res) => {
   res.json({
     service: 'AGUADA Backend API',
     version: '1.0.0',
@@ -75,13 +86,19 @@ app.get('/', (req, res) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
+// 404 handler para rotas de API
+app.use('/api/*', (req, res) => {
   res.status(404).json({
     success: false,
     error: 'Endpoint não encontrado',
     path: req.path,
   });
+});
+
+// SPA fallback - todas as rotas não-API vão para index.html
+app.get('*', (req, res) => {
+  // Servir index.html para rotas do frontend
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // Error handler
@@ -138,6 +155,9 @@ async function startServer() {
     
     serialBridge.connect();
     serialBridge.startStatusLogger(60000); // Log status a cada 1 min
+    
+    // Exportar serialBridge para uso em outros módulos (ex: health check)
+    global.serialBridge = serialBridge;
     
     // Start HTTP server
     server.listen(PORT, () => {

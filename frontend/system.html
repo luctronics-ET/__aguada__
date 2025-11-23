@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema - AGUADA Dashboard</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ Status do Sistema</h1>
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="painel.html">Painel</a>
+                <a href="dados.html">Dados</a>
+                <a href="consumo.html">Consumo</a>
+                <a href="abastecimento.html">Abastecimento</a>
+                <a href="manutencao.html">Manutenção</a>
+                <a href="history.html">Histórico</a>
+                <a href="alerts.html">Alertas</a>
+                <a href="config.html">Config</a>
+                <a href="system.html" class="active">Sistema</a>
+            </nav>
+            <div class="header-info">
+                <div>Sistema de Monitoramento Hidráulico</div>
+                <div class="status-badge status-online pulsing">● Online</div>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <span>Gateway ESP32</span>
+                    <span class="status-badge status-online" id="gatewayStatus">● Online</span>
+                </div>
+                <div class="card-body" id="gatewayCard">
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">MAC Address</div>
+                            <div class="data-value" style="font-size: 14px; font-family: monospace;" id="gatewayMac">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Uptime</div>
+                            <div class="data-value" id="gatewayUptime">-</div>
+                        </div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Packets Recebidos</div>
+                            <div class="data-value" id="gatewayPackets">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Taxa de Sucesso</div>
+                            <div class="data-value" id="gatewaySuccessRate">-</div>
+                        </div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">WiFi</div>
+                            <div class="data-value" id="gatewayWifi">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Última Atualização</div>
+                            <div class="data-value" id="gatewayLastUpdate" style="font-size: 11px;">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span>Backend API</span>
+                    <span class="status-badge status-online" id="backendStatus">● Online</span>
+                </div>
+                <div class="card-body" id="backendCard">
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Host</div>
+                            <div class="data-value" style="font-size: 14px;" id="backendHost">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Uptime</div>
+                            <div class="data-value" id="backendUptime">-</div>
+                        </div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Status</div>
+                            <div class="data-value" id="backendHealth">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Versão</div>
+                            <div class="data-value" id="backendVersion">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span>Banco de Dados</span>
+                    <span class="status-badge status-online" id="dbStatus">● Online</span>
+                </div>
+                <div class="card-body" id="dbCard">
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">SGBD</div>
+                            <div class="data-value" style="font-size: 14px;">PostgreSQL + TimescaleDB</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Status</div>
+                            <div class="data-value" id="dbHealth">Verificando...</div>
+                        </div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Conexão</div>
+                            <div class="data-value" id="dbConnection">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Última Verificação</div>
+                            <div class="data-value" id="dbLastCheck" style="font-size: 11px;">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 30px;">
+            <div class="card-header">
+                <span>Status dos Sensores</span>
+                <span style="font-size: 12px;">5 nós ativos</span>
+            </div>
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sensor</th>
+                            <th>MAC Address</th>
+                            <th>Status</th>
+                            <th>Última Leitura</th>
+                            <th>Bateria</th>
+                            <th>RSSI</th>
+                            <th>Uptime</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sensorsTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
+                                ⏳ Carregando status dos sensores...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <span>Tráfego de Rede</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">ESP-NOW (24h)</div>
+                            <div class="data-value" id="networkEspNow">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">HTTP POST (24h)</div>
+                            <div class="data-value" id="networkHttp">-</div>
+                        </div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Taxa de Sucesso</div>
+                            <div class="data-value" id="networkSuccessRate">-</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Taxa de Erro</div>
+                            <div class="data-value" id="networkErrorRate">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span>Armazenamento</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Status</div>
+                            <div class="data-value" id="storageStatus">Verificando...</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Última Verificação</div>
+                            <div class="data-value" id="storageLastCheck" style="font-size: 11px;">-</div>
+                        </div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-item">
+                            <div class="data-label">Sistema</div>
+                            <div class="data-value" style="font-size: 14px;">PostgreSQL + TimescaleDB</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Retenção Configurada</div>
+                            <div class="data-value">2 anos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-footer">
+            <div class="stat">
+                <div class="stat-value" id="footerActiveSensors">-</div>
+                <div class="stat-label">Sensores Ativos</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="footerUptime">-</div>
+                <div class="stat-label">Uptime (30d)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="footerRecords">-</div>
+                <div class="stat-label">Registros no DB</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="footerBackendUptime">-</div>
+                <div class="stat-label">Backend Uptime</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/api-service.js"></script>
+    <script src="assets/ui-utils.js"></script>
+    <script src="assets/app.js"></script>
+    <script>
+        let refreshInterval = null;
+
+        // Carregar status dos sensores
+        async function loadSensorsStatus() {
+            try {
+                if (!window.apiService) {
+                    console.warn('[System] API Service não disponível');
+                    return;
+                }
+
+                // Buscar status dos sensores
+                const response = await window.apiService.getSensorsStatus();
+                let statusData = [];
+                
+                // Verificar se a resposta é um array ou um objeto com data
+                if (Array.isArray(response)) {
+                    statusData = response;
+                } else if (response && response.data) {
+                    statusData = Array.isArray(response.data) ? response.data : [];
+                } else if (response && response.success === false) {
+                    // API retornou erro
+                    throw new Error(response.error || 'Erro ao buscar status dos sensores');
+                }
+                
+                // Buscar últimas leituras para obter bateria, RSSI, etc.
+                let readings = {};
+                try {
+                    readings = await window.apiService.getLatestReadings() || {};
+                } catch (error) {
+                    console.warn('[System] Erro ao buscar leituras:', error);
+                }
+                
+                const tbody = document.getElementById('sensorsTableBody');
+                if (!tbody) return;
+
+                if (!statusData || statusData.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
+                                Nenhum sensor encontrado
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                // Mapear leituras por elemento_id para facilitar busca
+                const readingsMap = {};
+                if (readings) {
+                    Object.entries(readings).forEach(([elementoId, reading]) => {
+                        readingsMap[elementoId] = reading;
+                    });
+                }
+
+                // Renderizar tabela
+                tbody.innerHTML = statusData.map(sensor => {
+                    const elementoId = sensor.elemento_id || sensor.sensor_id;
+                    const reading = readingsMap[elementoId] || {};
+                    
+                    // Determinar status
+                    let isOnline = false;
+                    let statusClass = 'status-offline';
+                    let statusText = '● Offline';
+                    
+                    // Verificar estado_conexao primeiro (vem da API)
+                    if (sensor.estado_conexao === 'online') {
+                        isOnline = true;
+                        statusClass = 'status-online';
+                        statusText = '● Online';
+                    } else if (sensor.estado_conexao === 'warning') {
+                        statusClass = 'status-warning';
+                        statusText = '● Aviso';
+                    } else if (sensor.status === 'online') {
+                        // Fallback para campo status
+                        isOnline = true;
+                        statusClass = 'status-online';
+                        statusText = '● Online';
+                    } else if (sensor.ultima_leitura) {
+                        // Calcular baseado em última leitura
+                        const lastReading = new Date(sensor.ultima_leitura);
+                        if (!isNaN(lastReading.getTime())) {
+                            const diffMs = new Date() - lastReading;
+                            isOnline = diffMs < 5 * 60 * 1000; // 5 minutos
+                            if (isOnline) {
+                                statusClass = 'status-online';
+                                statusText = '● Online';
+                            } else if (diffMs < 60 * 60 * 1000) {
+                                // Entre 5 min e 1 hora = warning
+                                statusClass = 'status-warning';
+                                statusText = '● Aviso';
+                            }
+                        }
+                    }
+                    
+                    // Calcular tempo desde última leitura
+                    let lastReadingTime = '-';
+                    if (sensor.ultima_leitura) {
+                        const lastReading = new Date(sensor.ultima_leitura);
+                        const now = new Date();
+                        if (!isNaN(lastReading.getTime())) {
+                            const diffMs = now - lastReading;
+                            const diffSecs = Math.floor(diffMs / 1000);
+                            const diffMins = Math.floor(diffSecs / 60);
+                            const diffHours = Math.floor(diffMins / 60);
+                            const diffDays = Math.floor(diffHours / 24);
+                            
+                            if (diffSecs < 60) {
+                                lastReadingTime = `há ${diffSecs}s`;
+                            } else if (diffMins < 60) {
+                                lastReadingTime = `há ${diffMins}min`;
+                            } else if (diffHours < 24) {
+                                lastReadingTime = `há ${diffHours}h`;
+                            } else {
+                                lastReadingTime = `há ${diffDays}d`;
+                            }
+                        }
+                    }
+                    
+                    // Bateria - buscar do reading se disponível
+                    let batteryDisplay = '-';
+                    const readingData = readings[elementoId] || readings[sensor.sensor_id] || {};
+                    const batteryValue = sensor.battery_mv || readingData.battery || readingData.meta?.battery_mv;
+                    if (batteryValue) {
+                        // Se já está em mV, converter para V
+                        const batteryV = batteryValue > 1000 ? (parseFloat(batteryValue) / 1000).toFixed(2) : parseFloat(batteryValue).toFixed(2);
+                        const batteryIcon = batteryV >= 4.5 ? '✅' : batteryV >= 4.0 ? '⚠️' : '🔴';
+                        batteryDisplay = `${batteryV}V ${batteryIcon}`;
+                    }
+                    
+                    // RSSI
+                    const rssiValue = sensor.rssi_dbm || readingData.rssi || readingData.meta?.rssi_dbm;
+                    const rssiDisplay = rssiValue ? `${rssiValue} dBm` : '-';
+                    
+                    // MAC Address
+                    const macAddress = sensor.mac_address || sensor.node_mac || readingData.mac_address || '-';
+                    let macDisplay = '-';
+                    if (macAddress && macAddress !== '-') {
+                        // Formatar MAC address (adicionar : a cada 2 caracteres)
+                        const cleanMac = macAddress.replace(/:/g, '').toUpperCase();
+                        macDisplay = cleanMac.match(/.{1,2}/g)?.join(':') || macAddress;
+                    }
+                    
+                    // Uptime
+                    let uptimeDisplay = '-';
+                    const uptimeSec = sensor.uptime_sec || readingData.uptime_sec || readingData.meta?.uptime_sec;
+                    if (uptimeSec) {
+                        const days = Math.floor(uptimeSec / 86400);
+                        const hours = Math.floor((uptimeSec % 86400) / 3600);
+                        const minutes = Math.floor((uptimeSec % 3600) / 60);
+                        if (days > 0) {
+                            uptimeDisplay = `${days}d ${hours}h`;
+                        } else if (hours > 0) {
+                            uptimeDisplay = `${hours}h ${minutes}m`;
+                        } else {
+                            uptimeDisplay = `${minutes}m`;
+                        }
+                    }
+                    
+                    return `
+                        <tr>
+                            <td><strong>${elementoId || sensor.sensor_id || '-'}</strong></td>
+                            <td style="font-family: monospace; font-size: 12px;">${macDisplay}</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                            <td>${lastReadingTime}</td>
+                            <td>${batteryDisplay}</td>
+                            <td>${rssiDisplay}</td>
+                            <td>${uptimeDisplay}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                // Atualizar contador de nós ativos
+                const activeCount = statusData.filter(s => {
+                    if (s.estado_conexao === 'online' || s.status === 'online') return true;
+                    if (s.ultima_leitura) {
+                        const lastReading = new Date(s.ultima_leitura);
+                        if (!isNaN(lastReading.getTime())) {
+                            return (new Date() - lastReading) < 5 * 60 * 1000;
+                        }
+                    }
+                    return false;
+                }).length;
+                
+                const totalCount = statusData.length;
+                const headerCount = document.querySelector('.card-header span:nth-child(2)');
+                if (headerCount) {
+                    headerCount.textContent = `${activeCount}/${totalCount} nós ativos`;
+                }
+                
+                // Atualizar footer
+                const footerActiveSensors = document.getElementById('footerActiveSensors');
+                if (footerActiveSensors) {
+                    footerActiveSensors.textContent = `${activeCount}/${totalCount}`;
+                }
+                
+                // Atualizar outros stats do footer se disponíveis
+                try {
+                    const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
+                    const metricsResponse = await fetch(`${baseURL}/system/metrics`);
+                    if (metricsResponse.ok) {
+                        const metricsData = await metricsResponse.json();
+                        if (metricsData.success) {
+                            const footerBackendUptime = document.getElementById('footerBackendUptime');
+                            if (footerBackendUptime && metricsData.uptime) {
+                                const days = Math.floor(metricsData.uptime.seconds / 86400);
+                                footerBackendUptime.textContent = `${days}d`;
+                            }
+                            
+                            // Atualizar network stats
+                            if (metricsData.telemetry) {
+                                const networkEspNow = document.getElementById('networkEspNow');
+                                const networkHttp = document.getElementById('networkHttp');
+                                const networkSuccessRate = document.getElementById('networkSuccessRate');
+                                const networkErrorRate = document.getElementById('networkErrorRate');
+                                
+                                if (networkEspNow) {
+                                    networkEspNow.textContent = (metricsData.telemetry.totalReceived || 0).toLocaleString('pt-BR');
+                                }
+                                if (networkHttp) {
+                                    networkHttp.textContent = (metricsData.telemetry.totalProcessed || 0).toLocaleString('pt-BR');
+                                }
+                                if (networkSuccessRate && metricsData.telemetry.successRate) {
+                                    networkSuccessRate.textContent = metricsData.telemetry.successRate + '%';
+                                }
+                                if (networkErrorRate && metricsData.endpoints) {
+                                    networkErrorRate.textContent = (metricsData.endpoints.errorRate || 0).toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[System] Erro ao buscar métricas para footer:', error);
+                }
+
+            } catch (error) {
+                console.error('[System] Erro ao carregar status dos sensores:', error);
+                const tbody = document.getElementById('sensorsTableBody');
+                if (tbody) {
+                    const errorMsg = error.message || 'Erro desconhecido';
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px; color: #ef4444;">
+                                ❌ Erro ao carregar dados: ${errorMsg}<br>
+                                <small style="color: #999; margin-top: 10px; display: block;">
+                                    Verifique se o backend está rodando e se há sensores cadastrados no banco de dados.
+                                </small>
+                                <button onclick="loadSensorsStatus()" style="margin-top: 15px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    🔄 Tentar Novamente
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+
+        // Atualizar overview do sistema
+        async function updateSystemOverview() {
+            try {
+                if (!window.apiService) return;
+                
+                // Atualizar backend health
+                try {
+                const health = await window.apiService.getSystemHealth();
+                    const backendStatusEl = document.getElementById('backendStatus');
+                    const backendHealthEl = document.getElementById('backendHealth');
+                    const backendHostEl = document.getElementById('backendHost');
+                    const backendVersionEl = document.getElementById('backendVersion');
+                    
+                    if (health && health.status === 'ok') {
+                        if (backendStatusEl) {
+                            backendStatusEl.className = 'status-badge status-online';
+                            backendStatusEl.textContent = '● Online';
+                        }
+                        if (backendHealthEl) {
+                            backendHealthEl.textContent = 'Operacional';
+                        }
+                        if (backendHostEl) {
+                            backendHostEl.textContent = window.location.hostname + ':3000';
+                        }
+                        if (backendVersionEl && health.version) {
+                            backendVersionEl.textContent = health.version;
+                        }
+                    } else {
+                        if (backendStatusEl) {
+                            backendStatusEl.className = 'status-badge status-offline';
+                            backendStatusEl.textContent = '● Offline';
+                        }
+                        if (backendHealthEl) {
+                            backendHealthEl.textContent = 'Indisponível';
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[System] Erro ao buscar health:', error);
+                }
+                
+                // Atualizar gateway metrics
+                try {
+                    const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
+                    const gatewayResponse = await fetch(`${baseURL}/gateway/metrics`);
+                    if (gatewayResponse.ok) {
+                        const gatewayData = await gatewayResponse.json();
+                        if (gatewayData.success && gatewayData.gateways && gatewayData.gateways.length > 0) {
+                            const gateway = gatewayData.gateways[0];
+                            const gatewayMacEl = document.getElementById('gatewayMac');
+                            const gatewayUptimeEl = document.getElementById('gatewayUptime');
+                            const gatewayPacketsEl = document.getElementById('gatewayPackets');
+                            const gatewaySuccessRateEl = document.getElementById('gatewaySuccessRate');
+                            const gatewayWifiEl = document.getElementById('gatewayWifi');
+                            const gatewayLastUpdateEl = document.getElementById('gatewayLastUpdate');
+                            const gatewayStatusEl = document.getElementById('gatewayStatus');
+                            
+                            if (gatewayMacEl) {
+                                const mac = gateway.mac || '-';
+                                gatewayMacEl.textContent = mac.replace(/(.{2})/g, '$1:').slice(0, -1);
+                            }
+                            if (gatewayUptimeEl && gateway.uptime_seconds) {
+                                const days = Math.floor(gateway.uptime_seconds / 86400);
+                                const hours = Math.floor((gateway.uptime_seconds % 86400) / 3600);
+                                const minutes = Math.floor((gateway.uptime_seconds % 3600) / 60);
+                                gatewayUptimeEl.textContent = days > 0 ? `${days}d ${hours}h` : `${hours}h ${minutes}m`;
+                            }
+                            if (gatewayPacketsEl) {
+                                gatewayPacketsEl.textContent = (gateway.packets_received || 0).toLocaleString('pt-BR');
+                            }
+                            if (gatewaySuccessRateEl) {
+                                const total = (gateway.packets_received || 0) + (gateway.packets_failed || 0);
+                                const success = gateway.packets_received || 0;
+                                const rate = total > 0 ? ((success / total) * 100).toFixed(1) : 0;
+                                gatewaySuccessRateEl.textContent = `${rate}%`;
+                            }
+                            if (gatewayWifiEl) {
+                                gatewayWifiEl.textContent = gateway.wifi_connected ? '✓ Conectado' : '✗ Desconectado';
+                            }
+                            if (gatewayLastUpdateEl && gateway.lastUpdate) {
+                                const lastUpdate = new Date(gateway.lastUpdate);
+                                gatewayLastUpdateEl.textContent = lastUpdate.toLocaleTimeString('pt-BR');
+                            }
+                            if (gatewayStatusEl) {
+                                gatewayStatusEl.className = 'status-badge status-online';
+                                gatewayStatusEl.textContent = '● Online';
+                            }
+                        } else {
+                            // Gateway não disponível
+                            const gatewayStatusEl = document.getElementById('gatewayStatus');
+                            if (gatewayStatusEl) {
+                                gatewayStatusEl.className = 'status-badge status-offline';
+                                gatewayStatusEl.textContent = '● Offline';
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[System] Erro ao buscar gateway metrics:', error);
+                }
+                
+                // Atualizar backend uptime
+                try {
+                    const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
+                    const metricsResponse = await fetch(`${baseURL}/system/metrics`);
+                    if (metricsResponse.ok) {
+                        const metricsData = await metricsResponse.json();
+                        if (metricsData.success && metricsData.uptime) {
+                            const backendUptimeEl = document.getElementById('backendUptime');
+                            if (backendUptimeEl && metricsData.uptime.formatted) {
+                                backendUptimeEl.textContent = metricsData.uptime.formatted;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[System] Erro ao buscar system metrics:', error);
+                }
+                
+                // Verificar banco de dados (via health check)
+                try {
+                    const health = await window.apiService.getSystemHealth();
+                    const dbStatusEl = document.getElementById('dbStatus');
+                    const dbHealthEl = document.getElementById('dbHealth');
+                    const dbConnectionEl = document.getElementById('dbConnection');
+                    const dbLastCheckEl = document.getElementById('dbLastCheck');
+                    
+                    if (health && health.database && health.database.status === 'ok') {
+                        if (dbStatusEl) {
+                            dbStatusEl.className = 'status-badge status-online';
+                            dbStatusEl.textContent = '● Online';
+                        }
+                        if (dbHealthEl) {
+                            dbHealthEl.textContent = 'Conectado';
+                        }
+                        if (dbConnectionEl) {
+                            dbConnectionEl.textContent = 'Ativo';
+                        }
+                    } else {
+                        if (dbStatusEl) {
+                            dbStatusEl.className = 'status-badge status-offline';
+                            dbStatusEl.textContent = '● Offline';
+                        }
+                        if (dbHealthEl) {
+                            dbHealthEl.textContent = 'Desconectado';
+                        }
+                    }
+                    if (dbLastCheckEl) {
+                        dbLastCheckEl.textContent = new Date().toLocaleTimeString('pt-BR');
+                    }
+                } catch (error) {
+                    console.warn('[System] Erro ao verificar DB:', error);
+                }
+            } catch (error) {
+                console.error('[System] Erro ao atualizar overview:', error);
+            }
+        }
+
+        // Inicializar
+        async function init() {
+            console.log('[System] Inicializando página...');
+            
+            // Aguardar API Service
+            let attempts = 0;
+            while (!window.apiService && attempts < 50) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
+            if (!window.apiService) {
+                console.error('[System] API Service não carregou');
+                return;
+            }
+            
+            // Carregar dados iniciais
+            await loadSensorsStatus();
+            await updateSystemOverview();
+            
+            // Auto-refresh a cada 30 segundos
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            refreshInterval = setInterval(() => {
+                loadSensorsStatus();
+                updateSystemOverview();
+            }, 30000);
+            
+            console.log('[System] Página inicializada com sucesso');
+        }
+        
+        // Limpar intervalo ao sair da página
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+        
+        // Iniciar quando DOM estiver pronto
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

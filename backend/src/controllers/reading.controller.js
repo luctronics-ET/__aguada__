@@ -283,7 +283,7 @@ export async function getRawReadings(req, res) {
         r.unidade,
         r.meta,
         r.fonte
-      FROM leituras_raw r
+      FROM aguada.leituras_raw r
       ${whereClause}
       ORDER BY r.datetime DESC
       LIMIT $${paramIndex}
@@ -303,9 +303,12 @@ export async function getRawReadings(req, res) {
     });
   } catch (error) {
     logger.error('Erro ao obter leituras raw:', error);
+    logger.error('Stack trace:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Erro ao obter leituras'
+      error: 'Erro ao obter leituras',
+      message: error.message,
+      details: error.stack
     });
   }
 }

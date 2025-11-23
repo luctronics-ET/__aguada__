@@ -26,10 +26,10 @@ export async function getSystemHealth(req, res) {
     // Get database stats
     const dbStats = await pool.query(`
       SELECT 
-        (SELECT COUNT(*) FROM leituras_raw) as total_readings,
-        (SELECT COUNT(*) FROM sensores) as total_sensors,
-        (SELECT COUNT(*) FROM alertas WHERE resolvido = FALSE) as active_alerts,
-        (SELECT COUNT(*) FROM eventos WHERE datetime > NOW() - INTERVAL '24 hours') as recent_events
+        (SELECT COUNT(*) FROM aguada.leituras_raw) as total_readings,
+        (SELECT COUNT(*) FROM aguada.sensores) as total_sensors,
+        (SELECT COUNT(*) FROM aguada.alertas WHERE resolvido = FALSE) as active_alerts,
+        (SELECT COUNT(*) FROM aguada.eventos WHERE datetime > NOW() - INTERVAL '24 hours') as recent_events
     `);
 
     // System info
@@ -50,6 +50,21 @@ export async function getSystemHealth(req, res) {
       connected_clients: getClientsCount()
     };
 
+    // Serial Bridge stats (se disponível)
+    let serialBridgeStats = null;
+    if (global.serialBridge) {
+      const stats = global.serialBridge.getStats();
+      serialBridgeStats = {
+        status: stats.isConnected ? 'connected' : 'disconnected',
+        port: stats.portPath,
+        packets_received: stats.packetsReceived,
+        packets_sent: stats.packetsSent,
+        errors: stats.errors,
+        uptime_sec: stats.uptime,
+        last_packet_time: stats.lastPacketTime
+      };
+    }
+
     res.status(200).json({
       success: true,
       status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
@@ -62,6 +77,9 @@ export async function getSystemHealth(req, res) {
         websocket: {
           status: 'healthy',
           clients: wsStats.connected_clients
+        },
+        serial_bridge: serialBridgeStats || {
+          status: 'not_available'
         },
         api: {
           status: 'healthy'

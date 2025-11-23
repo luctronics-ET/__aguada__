@@ -18,8 +18,8 @@ export async function getAllSensors(req, res) {
         s.ultima_calibracao,
         e.nome as elemento_nome,
         e.tipo as elemento_tipo
-      FROM sensores s
-      LEFT JOIN elementos e ON s.elemento_id = e.elemento_id
+      FROM aguada.sensores s
+      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
       ORDER BY s.sensor_id
     `);
 
@@ -51,8 +51,8 @@ export async function getSensorById(req, res) {
         e.nome as elemento_nome,
         e.tipo as elemento_tipo,
         e.parametros as elemento_parametros
-      FROM sensores s
-      LEFT JOIN elementos e ON s.elemento_id = e.elemento_id
+      FROM aguada.sensores s
+      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
       WHERE s.sensor_id = $1
     `, [sensor_id]);
 
@@ -108,7 +108,7 @@ export async function updateSensor(req, res) {
 
     values.push(sensor_id);
     const query = `
-      UPDATE sensores 
+      UPDATE aguada.sensores 
       SET ${setClause.join(', ')}, 
           data_atualizacao = NOW()
       WHERE sensor_id = $${paramCount}
@@ -158,9 +158,9 @@ export async function getSensorsStatus(req, res) {
           WHEN MAX(l.datetime) > NOW() - INTERVAL '1 hour' THEN 'warning'
           ELSE 'offline'
         END as estado_conexao
-      FROM sensores s
-      LEFT JOIN elementos e ON s.elemento_id = e.elemento_id
-      LEFT JOIN leituras_raw l ON s.sensor_id = l.sensor_id
+      FROM aguada.sensores s
+      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
+      LEFT JOIN aguada.leituras_raw l ON s.sensor_id = l.sensor_id
       GROUP BY s.sensor_id, s.elemento_id, s.status, e.nome
       ORDER BY s.sensor_id
     `);
@@ -179,9 +179,15 @@ export async function getSensorsStatus(req, res) {
     });
   } catch (error) {
     logger.error('Error fetching sensors status:', error);
+    logger.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     res.status(500).json({
       success: false,
-      error: 'Erro ao buscar status dos sensores'
+      error: 'Erro ao buscar status dos sensores',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }

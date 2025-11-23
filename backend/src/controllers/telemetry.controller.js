@@ -338,15 +338,35 @@ export async function receiveManualReading(req, res) {
       });
     }
     
+    // Se recebeu nivel_cm mas o sensor usa distance_cm, converter
+    let variavelFinal = variable;
+    let valorFinal = value;
+    
+    if (variable === 'nivel_cm' && sensor.variavel === 'distance_cm') {
+      // Converter nível para distância
+      // nivel_cm = altura_cm - distancia_cm + offset
+      // distancia_cm = altura_cm - nivel_cm + offset
+      // Precisamos dos parâmetros do elemento para calcular
+      const elementoParametros = sensor.elemento_parametros || {};
+      const altura_cm = elementoParametros.altura_cm || 400;
+      const offset_cm = elementoParametros.offset_cm || elementoParametros.hsensor_cm || 20;
+      valorFinal = altura_cm - value + offset_cm;
+      variavelFinal = 'distance_cm';
+      logger.info('Convertido nivel_cm para distance_cm', { nivel_cm: value, distance_cm: valorFinal });
+    }
+    
     // Inserir leitura bruta
     await readingService.insertRawReading({
       sensor_id: sensor.sensor_id,
       elemento_id: sensor.elemento_id,
-      variavel: variable,
-      valor: value,
+      variavel: variavelFinal,
+      valor: valorFinal,
       unidade: variable === 'nivel_cm' ? 'cm' : (variable === 'pressao_bar' ? 'bar' : 'lpm'),
       meta: {
         manual: true,
+        volume_m3: observacao?.includes('Volume:') ? parseFloat(observacao.match(/Volume: ([\d.]+)/)?.[1] || 0) : null,
+        original_variable: variable,
+        original_value: value,
       },
       fonte: 'usuario',
       autor: usuario,

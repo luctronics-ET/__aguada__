@@ -22,9 +22,9 @@ export async function getAlerts(req, res) {
         a.*,
         s.elemento_id,
         e.nome as elemento_nome
-      FROM alertas a
-      LEFT JOIN sensores s ON a.sensor_id = s.sensor_id
-      LEFT JOIN elementos e ON s.elemento_id = e.elemento_id
+      FROM aguada.alertas a
+      LEFT JOIN aguada.sensores s ON a.sensor_id = s.sensor_id
+      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
       WHERE 1=1
     `;
     
@@ -61,11 +61,17 @@ export async function getAlerts(req, res) {
     const result = await pool.query(query, params);
 
     // Get total count
-    const countResult = await pool.query(`
-      SELECT COUNT(*) as total 
-      FROM alertas 
-      WHERE resolvido = ${status === 'active' ? 'FALSE' : status === 'resolved' ? 'TRUE' : 'TRUE OR resolvido = FALSE'}
-    `);
+    let countQuery = `SELECT COUNT(*) as total FROM aguada.alertas WHERE 1=1`;
+    const countParams = [];
+    let countParamCount = 1;
+    
+    if (status === 'active') {
+      countQuery += ` AND resolvido = FALSE`;
+    } else if (status === 'resolved') {
+      countQuery += ` AND resolvido = TRUE`;
+    }
+    
+    const countResult = await pool.query(countQuery, countParams);
 
     res.status(200).json({
       success: true,
@@ -75,9 +81,15 @@ export async function getAlerts(req, res) {
     });
   } catch (error) {
     logger.error('Error fetching alerts:', error);
+    logger.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     res.status(500).json({
       success: false,
-      error: 'Erro ao buscar alertas'
+      error: 'Erro ao buscar alertas',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }
@@ -98,7 +110,7 @@ export async function createAlert(req, res) {
     }
 
     const result = await pool.query(`
-      INSERT INTO alertas (sensor_id, tipo, nivel, mensagem, detalhes, datetime)
+      INSERT INTO aguada.alertas (sensor_id, tipo, nivel, mensagem, detalhes, datetime)
       VALUES ($1, $2, $3, $4, $5, NOW())
       RETURNING *
     `, [sensor_id, tipo, nivel, mensagem, detalhes || null]);
@@ -134,7 +146,7 @@ export async function resolveAlert(req, res) {
     const { observacao } = req.body;
 
     const result = await pool.query(`
-      UPDATE alertas 
+      UPDATE aguada.alertas 
       SET resolvido = TRUE,
           data_resolucao = NOW(),
           observacao = $2
@@ -177,7 +189,7 @@ export async function getAlertsSummary(req, res) {
         COUNT(*) as count,
         COUNT(CASE WHEN resolvido = FALSE THEN 1 END) as active,
         COUNT(CASE WHEN resolvido = TRUE THEN 1 END) as resolved
-      FROM alertas
+      FROM aguada.alertas
       WHERE datetime > NOW() - INTERVAL '7 days'
       GROUP BY nivel
     `);

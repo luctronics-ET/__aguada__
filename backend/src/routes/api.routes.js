@@ -6,6 +6,7 @@ import alertsController from '../controllers/alerts.controller.js';
 import statsController from '../controllers/stats.controller.js';
 import systemController from '../controllers/system.controller.js';
 import gatewayController from '../controllers/gateway.controller.js';
+import databaseController from '../controllers/database.controller.js';
 import exportService from '../services/export.service.js';
 
 const router = express.Router();
@@ -205,6 +206,22 @@ router.post('/gateway/metrics', gatewayController.receiveGatewayMetrics);
  * Obtém métricas de todos os gateways
  */
 router.get('/gateway/metrics', gatewayController.getGatewayMetrics);
+
+// ============================================================================
+// DATABASE
+// ============================================================================
+
+/**
+ * GET /api/database/tables
+ * Lista todas as tabelas do schema aguada
+ */
+router.get('/database/tables', databaseController.getTables);
+
+/**
+ * GET /api/database/table/:tableName
+ * Obtém dados de uma tabela com paginação
+ */
+router.get('/database/table/:tableName', databaseController.getTableData);
 
 // ============================================================================
 // HEALTH
