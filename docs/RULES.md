@@ -142,33 +142,22 @@ Cada elemento tem coordenadas para visualização em:
 - Cada variável é enviada **individualmente** quando muda
 - `value` sempre como **inteiro** (ex: 244.8cm → 24480, multiplicado por 100)
 - `datetime` é adicionado pelo **servidor** ao receber
-- `battery` em mV (fonte DC 5V → 5000mV)
+- `VinDC` em mV (fonte DC 5V → 5000mV)
 - `uptime` em segundos desde boot
 - `rssi` em dBm (força do sinal ESP-NOW)
 
 **Tipos de Dados Enviados:**
 
-#### TYPE_SINGLE_ULTRA (node_sensor_10: RCON, RCAV, RB03)
+#### NODE_AGUADA_MK1 :  (RCON, RCAV, RB03, CIE1, CIE2)
 
 | type | value | unit | quando enviar |
 |------|-------|------|---------------|
-| `distance_cm` | int (cm*100) | cm | variação > ±2cm |
+| `distance_cm` | int (cm) | cm | variação > ±1cm |
 | `sound_in` | 0 ou 1 | boolean | mudança de estado |
-| `valve_in` | 0 ou 1 | boolean | mudança de estado |
-| `valve_out` | 0 ou 1 | boolean | mudança de estado |
 
-#### TYPE_DUAL_ULTRA (node_sensor_20: IE01 + IE02)
 
-| type | value | unit | quando enviar |
-|------|-------|------|---------------|
-| `IE01_distance_cm` | int (cm*100) | cm | variação > ±2cm |
-| `IE02_distance_cm` | int (cm*100) | cm | variação > ±2cm |
-| `IE01_sound_in` | 0 ou 1 | boolean | mudança de estado |
-| `IE02_sound_in` | 0 ou 1 | boolean | mudança de estado |
-| `IE01_valve_in` | 0 ou 1 | boolean | mudança de estado |
-| `IE01_valve_out` | 0 ou 1 | boolean | mudança de estado |
-| `IE02_valve_in` | 0 ou 1 | boolean | mudança de estado |
-| `IE02_valve_out` | 0 ou 1 | boolean | mudança de estado |
+
+
 
 **Exemplo de Sequência de Envios:**
 
@@ -179,8 +168,6 @@ Cada elemento tem coordenadas para visualização em:
 // Som detectado (água entrando)
 {"mac":"dc:06:75:67:6a:cc","type":"sound_in","value":1,"battery":5000,"uptime":3602,"rssi":-50}
 
-// Válvula entrada abriu
-{"mac":"dc:06:75:67:6a:cc","type":"valve_in","value":1,"battery":5000,"uptime":3605,"rssi":-50}
 ```
 
 **Recursos em Todos os Nodes:**

@@ -1,0 +1,63 @@
+menu "AGUADA Gateway OTA Configuration"
+
+    config WIFI_SSID
+        string "WiFi SSID"
+        default "luciano"
+        help
+            SSID da rede WiFi
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default "password"
+        help
+            Senha da rede WiFi
+
+    config BACKEND_HOST
+        string "Backend Host"
+        default "192.168.0.117"
+        help
+            IP ou hostname do servidor backend
+
+    config BACKEND_PORT
+        int "Backend Port"
+        default 3000
+        help
+            Porta do servidor backend
+
+    config ESPNOW_CHANNEL
+        int "ESP-NOW Channel"
+        range 1 14
+        default 11
+        help
+            Canal WiFi para ESP-NOW (deve coincidir com o SSID)
+
+    choice GATEWAY_MODE
+        prompt "Gateway Mode"
+        default GATEWAY_MODE_PRIMARY
+        help
+            Modo de operação do gateway
+
+        config GATEWAY_MODE_PRIMARY
+            bool "Primary (HTTP POST direto)"
+            help
+                Gateway primário - envia dados diretamente para o backend via HTTP
+
+        config GATEWAY_MODE_REPEATER
+            bool "Repeater (retransmite para outro gateway)"
+            help
+                Gateway repetidor - retransmite pacotes ESP-NOW para o gateway primário
+    endchoice
+
+    config GATEWAY_MODE
+        int
+        default 0 if GATEWAY_MODE_PRIMARY
+        default 1 if GATEWAY_MODE_REPEATER
+
+    config PRIMARY_GATEWAY_MAC
+        string "Primary Gateway MAC (para modo repeater)"
+        default "80:f1:b2:50:2e:c4"
+        depends on GATEWAY_MODE_REPEATER
+        help
+            MAC do gateway primário (formato XX:XX:XX:XX:XX:XX)
+
+endmenu

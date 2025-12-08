@@ -141,7 +141,12 @@ class SerialBridge {
       const data = JSON.parse(jsonString);
 
       // Validar estrutura esperada
-      if (!data.mac || !data.type || data.value === undefined) {
+      // Formato antigo: {mac, type, value}
+      // Formato AGUADA-1: {mac, distance_mm, vcc_bat_mv, rssi}
+      const isAguada1Format = data.mac && data.distance_mm !== undefined;
+      const isOldFormat = data.mac && data.type && data.value !== undefined;
+      
+      if (!isAguada1Format && !isOldFormat) {
         logger.warn(`[Serial Bridge] JSON recebido mas estrutura inválida:`, data);
         return;
       }
@@ -149,11 +154,20 @@ class SerialBridge {
       this.stats.packetsReceived++;
       this.stats.lastPacketTime = new Date();
 
-      logger.info(`[Serial Bridge] 📡 Telemetria recebida:`, {
-        mac: data.mac,
-        type: data.type,
-        value: data.value,
-      });
+      if (isAguada1Format) {
+        logger.info(`[Serial Bridge] 📡 Telemetria AGUADA-1 recebida:`, {
+          mac: data.mac,
+          distance_mm: data.distance_mm,
+          vcc_bat_mv: data.vcc_bat_mv,
+          rssi: data.rssi,
+        });
+      } else {
+        logger.info(`[Serial Bridge] 📡 Telemetria recebida:`, {
+          mac: data.mac,
+          type: data.type,
+          value: data.value,
+        });
+      }
 
       // Enviar ao backend
       await this.sendToBackend(data);

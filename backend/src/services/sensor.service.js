@@ -12,6 +12,7 @@ export async function identifySensorByMac(nodeMac, variable) {
         s.elemento_id,
         s.tipo,
         s.ajuste_offset,
+        s.variavel,
         e.nome as elemento_nome,
         e.parametros as elemento_parametros
       FROM aguada.sensores s
@@ -32,6 +33,44 @@ export async function identifySensorByMac(nodeMac, variable) {
     return result.rows[0];
   } catch (error) {
     logger.error('Erro ao identificar sensor:', error);
+    throw error;
+  }
+}
+
+/**
+ * Identifica sensor apenas pelo MAC (formato AGUADA-1 - sempre distance_mm)
+ * Retorna o primeiro sensor ativo com variavel 'distance_cm' ou 'nivel_cm'
+ */
+export async function identifySensorByMacOnly(nodeMac) {
+  try {
+    const query = `
+      SELECT 
+        s.sensor_id,
+        s.elemento_id,
+        s.tipo,
+        s.ajuste_offset,
+        s.variavel,
+        e.nome as elemento_nome,
+        e.parametros as elemento_parametros
+      FROM aguada.sensores s
+      JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
+      WHERE s.node_mac = $1 
+        AND s.status = 'ativo'
+        AND (s.variavel = 'distance_cm' OR s.variavel = 'nivel_cm')
+      ORDER BY s.variavel DESC
+      LIMIT 1
+    `;
+    
+    const result = await pool.query(query, [nodeMac]);
+    
+    if (result.rows.length === 0) {
+      logger.warn(`Sensor não encontrado: MAC=${nodeMac} (formato AGUADA-1)`);
+      return null;
+    }
+    
+    return result.rows[0];
+  } catch (error) {
+    logger.error('Erro ao identificar sensor por MAC:', error);
     throw error;
   }
 }
@@ -82,6 +121,7 @@ export async function updateSensorOffset(sensorId, offset) {
 
 export default {
   identifySensorByMac,
+  identifySensorByMacOnly,
   getSensorById,
   updateSensorOffset,
 };

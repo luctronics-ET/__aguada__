@@ -7,7 +7,7 @@
       "tipo": "cilindrico",
       "capacidade_l": 80000,
       "dimensoes": {
-        "altura_cm": 400,
+        "altura_cm": 500,
         "diametro_cm": 510,
         "hsensor_cm": 40
       },

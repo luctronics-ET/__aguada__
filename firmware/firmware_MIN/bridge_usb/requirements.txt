@@ -1,0 +1,4 @@
+# AGUADA Bridge USB - Dependências Python
+
+pyserial>=3.5
+requests>=2.28.0

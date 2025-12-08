@@ -1,25 +1,27 @@
 services:
   # PostgreSQL com TimescaleDB
   postgres:
-    image: timescaledev/timescaledb:latest-pg15
+    image: timescale/timescaledb:latest-pg16
     container_name: aguada-postgres
     environment:
-      POSTGRES_USER: aguada_user
-      POSTGRES_PASSWORD: aguada_pass_2025
-      POSTGRES_DB: aguada_db
+      POSTGRES_USER: ${DB_USER:-aguada}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-aguada123}
+      POSTGRES_DB: ${DB_NAME:-aguada}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aguada_user -d aguada_db"]
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DB_USER:-aguada} -d ${DB_NAME:-aguada}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - aguada-net
+    restart: unless-stopped
 
   # Redis para cache/sessions
   redis:
@@ -27,7 +29,7 @@ services:
     container_name: aguada-redis
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -37,6 +39,22 @@ services:
       retries: 5
     networks:
       - aguada-net
+    restart: unless-stopped
+
+  # MQTT Broker (Mosquitto) - COMENTADO TEMPORARIAMENTE
+  # mosquitto:
+  #   image: eclipse-mosquitto:2
+  #   container_name: aguada-mqtt
+  #   ports:
+  #     - "${MQTT_PORT:-1883}:1883"
+  #     - "${MQTT_WS_PORT:-9001}:9001"
+  #   volumes:
+  #     - ./docker/mosquitto/config:/mosquitto/config:ro
+  #     - mosquitto_data:/mosquitto/data
+  #     - mosquitto_log:/mosquitto/log
+  #   networks:
+  #     - aguada-net
+  #   restart: unless-stopped
 
   # Backend Node.js
   backend:
@@ -45,26 +63,25 @@ services:
       dockerfile: Dockerfile
     container_name: aguada-backend
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: aguada_user
-      DB_PASSWORD: aguada_pass_2025
-      DB_NAME: aguada_db
+      DB_USER: ${DB_USER:-aguada}
+      DB_PASSWORD: ${DB_PASSWORD:-aguada123}
+      DB_NAME: ${DB_NAME:-aguada}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      LOG_LEVEL: info
-      CORS_ORIGIN: "*"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./backend/src:/app/src
       - ./backend/logs:/app/logs
     networks:
       - aguada-net
@@ -75,10 +92,10 @@ services:
     image: nginx:alpine
     container_name: aguada-nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ./frontend:/usr/share/nginx/html/aguada
+      - ./frontend:/usr/share/nginx/html/aguada:ro
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/certs:/etc/nginx/certs:ro
     depends_on:
@@ -87,10 +104,36 @@ services:
       - aguada-net
     restart: unless-stopped
 
+  # Grafana para visualização
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aguada-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aguada-net
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_log:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:

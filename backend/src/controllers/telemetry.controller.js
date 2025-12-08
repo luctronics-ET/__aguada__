@@ -24,7 +24,9 @@ export async function receiveTelemetry(req, res) {
     metricsService.recordTelemetryReceived();
     
     // Detectar formato baseado na presença do campo 'mac' vs 'node_mac'
-    const isIndividualFormat = 'mac' in req.body && 'type' in req.body;
+    // Formato AGUADA-1 tem 'mac' e 'distance_mm' (sem 'type')
+    // Formato antigo tem 'mac' e 'type'
+    const isIndividualFormat = 'mac' in req.body && ('type' in req.body || 'distance_mm' in req.body);
     
     let result;
     if (isIndividualFormat) {
@@ -64,6 +66,9 @@ export async function receiveTelemetry(req, res) {
 
 /**
  * Processa telemetria individual (formato firmware)
+ * Suporta dois formatos:
+ * 1. Formato antigo: {"mac":"...","type":"distance_cm","value":2448,"battery":5000,"rssi":-50}
+ * 2. Formato AGUADA-1: {"mac":"...","distance_mm":2450,"vcc_bat_mv":4900,"rssi":-50}
  */
 async function receiveIndividualTelemetry(req, res) {
   try {
@@ -79,33 +84,79 @@ async function receiveIndividualTelemetry(req, res) {
       });
     }
     
-    const { mac, type, value, battery, rssi, uptime } = validation.data;
+    const data = validation.data;
     
-    // Identificar sensor pelo MAC + tipo de variável
-    const sensor = await sensorService.identifySensorByMac(mac, type);
+    // Detectar formato: AGUADA-1 tem distance_mm, formato antigo tem type+value
+    const isAguada1Format = 'distance_mm' in data;
     
-    if (!sensor) {
-      logger.warn(`Sensor desconhecido: MAC=${mac}, type=${type}`);
-      return res.status(404).json({
-        success: false,
-        error: 'Sensor não registrado',
-        mac,
-        type,
-      });
-    }
+    let mac, type, value, battery, rssi, uptime, valorReal, unidade, sensor;
     
-    // Converter valor conforme tipo
-    let valorReal = value;
-    let unidade = '';
-    
-    if (type === 'distance_cm') {
-      // distance_cm vem multiplicado por 10 (ex: 2448 = 244.8 cm)
-      valorReal = value / 100.0;
+    if (isAguada1Format) {
+      // Formato AGUADA-1: {"mac":"...","distance_mm":2450,"vcc_bat_mv":4900,"rssi":-50}
+      mac = data.mac;
+      type = 'distance_cm'; // Sempre distance_cm no formato AGUADA-1
+      value = data.distance_mm;
+      battery = data.vcc_bat_mv; // vcc_bat_mv → battery
+      rssi = data.rssi;
+      uptime = undefined; // Não disponível no formato AGUADA-1
+      
+      // Converter distance_mm → distance_cm (dividir por 10)
+      // Ex: 2450mm = 245.0cm
+      valorReal = value / 10.0;
       unidade = 'cm';
+      
+      // Identificar sensor apenas por MAC (formato AGUADA-1)
+      sensor = await sensorService.identifySensorByMacOnly(mac);
+      
+      if (!sensor) {
+        logger.warn(`Sensor não encontrado (AGUADA-1): MAC=${mac}`);
+        return res.status(404).json({
+          success: false,
+          error: 'Sensor não registrado',
+          mac,
+          format: 'AGUADA-1',
+        });
+      }
+      
+      logger.info('Telemetria AGUADA-1 recebida', {
+        mac,
+        distance_mm: value,
+        distance_cm: valorReal,
+        vcc_bat_mv: battery,
+      });
+      
     } else {
-      // valve_in, valve_out, sound_in são estados (0 ou 1)
-      valorReal = value;
-      unidade = 'boolean';
+      // Formato antigo: {"mac":"...","type":"distance_cm","value":2448,"battery":5000,"rssi":-50}
+      mac = data.mac;
+      type = data.type;
+      value = data.value;
+      battery = data.battery;
+      rssi = data.rssi;
+      uptime = data.uptime;
+      
+      // Identificar sensor pelo MAC + tipo de variável
+      sensor = await sensorService.identifySensorByMac(mac, type);
+      
+      if (!sensor) {
+        logger.warn(`Sensor desconhecido: MAC=${mac}, type=${type}`);
+        return res.status(404).json({
+          success: false,
+          error: 'Sensor não registrado',
+          mac,
+          type,
+        });
+      }
+      
+      // Converter valor conforme tipo
+      if (type === 'distance_cm') {
+        // distance_cm vem multiplicado por 100 (ex: 24480 = 244.8 cm)
+        valorReal = value / 100.0;
+        unidade = 'cm';
+      } else {
+        // valve_in, valve_out, sound_in são estados (0 ou 1)
+        valorReal = value;
+        unidade = 'boolean';
+      }
     }
     
     const datetime = new Date();

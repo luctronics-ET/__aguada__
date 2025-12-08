@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AGUADA - Monitor de Leituras</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        min-height: 100vh;
+        color: #fff;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      h1 {
+        font-size: 2.5em;
+        background: linear-gradient(90deg, #00d4ff, #00ff88);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 10px;
+      }
+
+      .status {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        flex-wrap: wrap;
+        margin-top: 15px;
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 15px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 20px;
+      }
+
+      .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+      }
+
+      .status-dot.connected {
+        background: #00ff88;
+      }
+      .status-dot.disconnected {
+        background: #ff4444;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.1);
+        }
+      }
+
+      .controls {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .btn-primary {
+        background: linear-gradient(90deg, #00d4ff, #00a8cc);
+        color: #fff;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+      }
+
+      .btn-danger {
+        background: linear-gradient(90deg, #ff4444, #cc0000);
+        color: #fff;
+      }
+
+      .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(255, 68, 68, 0.4);
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+      }
+
+      .stat-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .stat-value {
+        font-size: 2em;
+        font-weight: bold;
+        color: #00d4ff;
+      }
+
+      .stat-label {
+        color: #888;
+        margin-top: 5px;
+      }
+
+      .table-container {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 15px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      th {
+        background: rgba(0, 212, 255, 0.1);
+        color: #00d4ff;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85em;
+        letter-spacing: 1px;
+      }
+
+      tr:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .mac-address {
+        font-family: "Courier New", monospace;
+        color: #00ff88;
+        font-size: 0.9em;
+      }
+
+      .distance {
+        font-weight: bold;
+        color: #fff;
+      }
+
+      .rssi {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .rssi-bar {
+        width: 40px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .rssi-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+
+      .rssi-excellent {
+        background: #00ff88;
+      }
+      .rssi-good {
+        background: #88ff00;
+      }
+      .rssi-fair {
+        background: #ffcc00;
+      }
+      .rssi-poor {
+        background: #ff4444;
+      }
+
+      .datetime {
+        color: #888;
+        font-size: 0.9em;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+      }
+
+      .empty-state svg {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 20px;
+        opacity: 0.3;
+      }
+
+      .serial-config {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      input,
+      select {
+        padding: 10px 15px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.3);
+        color: #fff;
+        font-size: 1em;
+      }
+
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #00d4ff;
+      }
+
+      .log {
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 20px;
+        max-height: 150px;
+        overflow-y: auto;
+        font-family: "Courier New", monospace;
+        font-size: 0.85em;
+        color: #888;
+      }
+
+      .log-entry {
+        margin: 3px 0;
+      }
+
+      .log-entry.error {
+        color: #ff4444;
+      }
+      .log-entry.success {
+        color: #00ff88;
+      }
+      .log-entry.info {
+        color: #00d4ff;
+      }
+
+      @media (max-width: 768px) {
+        h1 {
+          font-size: 1.8em;
+        }
+        th,
+        td {
+          padding: 10px 8px;
+          font-size: 0.9em;
+        }
+        .status {
+          gap: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>💧 AGUADA Monitor</h1>
+        <p>Sistema de Monitoramento de Reservatórios</p>
+        <div class="status">
+          <div class="status-item">
+            <div class="status-dot disconnected" id="serialStatus"></div>
+            <span id="serialStatusText">Desconectado</span>
+          </div>
+          <div class="status-item">
+            <span>📡 Canal: <strong>11</strong></span>
+          </div>
+          <div class="status-item">
+            <span id="lastUpdate">Última atualização: --</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="serial-config">
+        <label>Porta Serial:</label>
+        <select id="portSelect">
+          <option value="">Selecione...</option>
+        </select>
+        <button
+          class="btn-primary"
+          id="connectBtn"
+          onclick="toggleConnection()"
+        >
+          🔌 Conectar
+        </button>
+      </div>
+
+      <div class="controls">
+        <button class="btn-secondary" onclick="clearReadings()">
+          🗑️ Limpar
+        </button>
+        <button class="btn-secondary" onclick="exportCSV()">
+          📥 Exportar CSV
+        </button>
+        <button class="btn-secondary" onclick="toggleAutoScroll()">
+          <span id="autoScrollIcon">⏸️</span> Auto-scroll
+        </button>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-value" id="totalReadings">0</div>
+          <div class="stat-label">Total de Leituras</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="lastDistance">--</div>
+          <div class="stat-label">Última Distância (cm)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgRssi">--</div>
+          <div class="stat-label">RSSI Médio (dBm)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="uptime">--</div>
+          <div class="stat-label">Uptime Node (s)</div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Data/Hora</th>
+              <th>MAC</th>
+              <th>Tipo</th>
+              <th>Distância (cm)</th>
+              <th>RSSI</th>
+              <th>Uptime (s)</th>
+            </tr>
+          </thead>
+          <tbody id="readingsTable">
+            <tr class="empty-state-row">
+              <td colspan="7">
+                <div class="empty-state">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                  <p>Nenhuma leitura recebida</p>
+                  <p style="font-size: 0.9em; margin-top: 10px">
+                    Conecte à porta serial para começar
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="log" id="logArea">
+        <div class="log-entry info">
+          Sistema iniciado. Aguardando conexão serial...
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Estado da aplicação
+      let readings = [];
+      let port = null;
+      let reader = null;
+      let isConnected = false;
+      let autoScroll = true;
+      let readingCounter = 0;
+
+      // Elementos DOM
+      const serialStatus = document.getElementById("serialStatus");
+      const serialStatusText = document.getElementById("serialStatusText");
+      const connectBtn = document.getElementById("connectBtn");
+      const portSelect = document.getElementById("portSelect");
+      const readingsTable = document.getElementById("readingsTable");
+      const logArea = document.getElementById("logArea");
+
+      // Verificar suporte a Web Serial API
+      if ("serial" in navigator) {
+        log("Web Serial API suportada ✓", "success");
+      } else {
+        log("Web Serial API não suportada. Use Chrome/Edge.", "error");
+        connectBtn.disabled = true;
+      }
+
+      // Função de log
+      function log(message, type = "") {
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logArea.appendChild(entry);
+        logArea.scrollTop = logArea.scrollHeight;
+      }
+
+      // Conectar/Desconectar
+      async function toggleConnection() {
+        if (isConnected) {
+          await disconnect();
+        } else {
+          await connect();
+        }
+      }
+
+      // Conectar à porta serial
+      async function connect() {
+        try {
+          port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 115200 });
+
+          isConnected = true;
+          serialStatus.className = "status-dot connected";
+          serialStatusText.textContent = "Conectado";
+          connectBtn.textContent = "🔌 Desconectar";
+          connectBtn.className = "btn-danger";
+
+          log("Conectado à porta serial", "success");
+
+          // Iniciar leitura
+          readSerial();
+        } catch (error) {
+          log(`Erro ao conectar: ${error.message}`, "error");
+        }
+      }
+
+      // Desconectar
+      async function disconnect() {
+        try {
+          if (reader) {
+            await reader.cancel();
+            reader = null;
+          }
+          if (port) {
+            await port.close();
+            port = null;
+          }
+
+          isConnected = false;
+          serialStatus.className = "status-dot disconnected";
+          serialStatusText.textContent = "Desconectado";
+          connectBtn.textContent = "🔌 Conectar";
+          connectBtn.className = "btn-primary";
+
+          log("Desconectado", "info");
+        } catch (error) {
+          log(`Erro ao desconectar: ${error.message}`, "error");
+        }
+      }
+
+      // Ler dados da serial
+      async function readSerial() {
+        const decoder = new TextDecoderStream();
+        const inputDone = port.readable.pipeTo(decoder.writable);
+        reader = decoder.readable.getReader();
+
+        let buffer = "";
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += value;
+
+            // Processar linhas completas
+            const lines = buffer.split("\n");
+            buffer = lines.pop(); // Manter linha incompleta no buffer
+
+            for (const line of lines) {
+              processLine(line.trim());
+            }
+          }
+        } catch (error) {
+          if (error.name !== "TypeError") {
+            log(`Erro de leitura: ${error.message}`, "error");
+          }
+        }
+      }
+
+      // Processar linha recebida
+      function processLine(line) {
+        if (!line.startsWith("{")) return;
+
+        try {
+          const data = JSON.parse(line);
+
+          // Ignorar mensagens de boot/status do gateway
+          if (data.type === "gateway_boot" || data.type === "gateway_status") {
+            log(`Gateway: ${data.type}`, "info");
+            return;
+          }
+
+          // Adicionar timestamp
+          data.datetime = new Date();
+          data.id = ++readingCounter;
+
+          // Adicionar no início (mais recente primeiro)
+          readings.unshift(data);
+
+          // Limitar a 1000 leituras
+          if (readings.length > 1000) {
+            readings.pop();
+          }
+
+          // Atualizar UI
+          updateTable();
+          updateStats();
+
+          document.getElementById(
+            "lastUpdate"
+          ).textContent = `Última atualização: ${data.datetime.toLocaleTimeString()}`;
+        } catch (error) {
+          // Não é JSON válido, ignorar (pode ser log do ESP)
+        }
+      }
+
+      // Atualizar tabela
+      function updateTable() {
+        // Remover estado vazio
+        const emptyRow = document.querySelector(".empty-state-row");
+        if (emptyRow) emptyRow.remove();
+
+        // Reconstruir tabela
+        readingsTable.innerHTML = readings
+          .map((r, i) => {
+            const distance = (r.value / 100).toFixed(2);
+            const rssiClass = getRssiClass(r.rssi);
+            const rssiPercent = Math.min(100, Math.max(0, (r.rssi + 100) * 2));
+
+            return `
+                    <tr>
+                        <td>${r.id}</td>
+                        <td class="datetime">${formatDateTime(r.datetime)}</td>
+                        <td class="mac-address">${r.mac}</td>
+                        <td>${r.type}</td>
+                        <td class="distance">${distance}</td>
+                        <td>
+                            <span class="rssi">
+                                <div class="rssi-bar">
+                                    <div class="rssi-fill ${rssiClass}" style="width: ${rssiPercent}%"></div>
+                                </div>
+                                ${r.rssi} dBm
+                            </span>
+                        </td>
+                        <td>${r.uptime}</td>
+                    </tr>
+                `;
+          })
+          .join("");
+      }
+
+      // Atualizar estatísticas
+      function updateStats() {
+        document.getElementById("totalReadings").textContent = readings.length;
+
+        if (readings.length > 0) {
+          const latest = readings[0];
+          document.getElementById("lastDistance").textContent = (
+            latest.value / 100
+          ).toFixed(2);
+          document.getElementById("uptime").textContent = latest.uptime;
+
+          const avgRssi =
+            readings.slice(0, 10).reduce((sum, r) => sum + r.rssi, 0) /
+            Math.min(readings.length, 10);
+          document.getElementById("avgRssi").textContent = avgRssi.toFixed(1);
+        }
+      }
+
+      // Classe CSS baseada no RSSI
+      function getRssiClass(rssi) {
+        if (rssi >= -40) return "rssi-excellent";
+        if (rssi >= -55) return "rssi-good";
+        if (rssi >= -70) return "rssi-fair";
+        return "rssi-poor";
+      }
+
+      // Formatar data/hora
+      function formatDateTime(date) {
+        return (
+          date.toLocaleDateString("pt-BR") +
+          " " +
+          date.toLocaleTimeString("pt-BR")
+        );
+      }
+
+      // Limpar leituras
+      function clearReadings() {
+        readings = [];
+        readingCounter = 0;
+        readingsTable.innerHTML = `
+                <tr class="empty-state-row">
+                    <td colspan="7">
+                        <div class="empty-state">
+                            <p>Leituras limpas</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        updateStats();
+        log("Leituras limpas", "info");
+      }
+
+      // Exportar CSV
+      function exportCSV() {
+        if (readings.length === 0) {
+          alert("Nenhuma leitura para exportar");
+          return;
+        }
+
+        const headers = [
+          "ID",
+          "Data/Hora",
+          "MAC",
+          "Tipo",
+          "Valor",
+          "Distância (cm)",
+          "RSSI (dBm)",
+          "Uptime (s)",
+        ];
+        const rows = readings.map((r) => [
+          r.id,
+          formatDateTime(r.datetime),
+          r.mac,
+          r.type,
+          r.value,
+          (r.value / 100).toFixed(2),
+          r.rssi,
+          r.uptime,
+        ]);
+
+        const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+          "\n"
+        );
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `aguada_leituras_${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`;
+        link.click();
+
+        log(`Exportadas ${readings.length} leituras`, "success");
+      }
+
+      // Toggle auto-scroll
+      function toggleAutoScroll() {
+        autoScroll = !autoScroll;
+        document.getElementById("autoScrollIcon").textContent = autoScroll
+          ? "⏸️"
+          : "▶️";
+      }
+
+      // Simular dados para teste (remover em produção)
+      function simulateData() {
+        const macs = ["80:F1:B2:50:31:34", "80:F1:B2:50:31:35"];
+        setInterval(() => {
+          if (!isConnected) return;
+          const data = {
+            mac: macs[Math.floor(Math.random() * macs.length)],
+            type: "distance_cm",
+            value: Math.floor(Math.random() * 10000) + 2000,
+            uptime: Math.floor(Date.now() / 1000) % 10000,
+            rssi: -Math.floor(Math.random() * 50) - 25,
+          };
+          processLine(JSON.stringify(data));
+        }, 2000);
+      }
+    </script>
+  </body>
+</html>

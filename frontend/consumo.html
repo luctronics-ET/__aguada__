@@ -1,597 +1,752 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Análise de Consumo - AGUADA</title>
-    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        .chart-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
+      .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+      }
 
-        .chart-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
+      .chart-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
 
-        .chart-card h3 {
-            color: var(--primary-blue);
-            margin-bottom: 15px;
-        }
+      .chart-card h3 {
+        color: var(--primary-blue);
+        margin-bottom: 15px;
+      }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
 
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
+      .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+      }
 
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: bold;
-            color: var(--primary-blue);
-            margin: 10px 0;
-        }
+      .stat-card .value {
+        font-size: 32px;
+        font-weight: bold;
+        color: var(--primary-blue);
+        margin: 10px 0;
+      }
 
-        .stat-card .label {
-            color: var(--text-muted);
-            font-size: 14px;
-        }
+      .stat-card .label {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
 
-        .stat-card .change {
-            font-size: 12px;
-            margin-top: 8px;
-        }
+      .stat-card .change {
+        font-size: 12px;
+        margin-top: 8px;
+      }
 
-        .change.positive {
-            color: var(--success-green);
-        }
+      .change.positive {
+        color: var(--success-green);
+      }
 
-        .change.negative {
-            color: var(--danger-red);
-        }
+      .change.negative {
+        color: var(--danger-red);
+      }
 
-        .period-selector {
-            background: white;
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
+      .period-selector {
+        background: white;
+        padding: 15px 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
 
-        .period-btn {
-            padding: 8px 16px;
-            border: 1px solid var(--border-color);
-            background: white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
+      .period-btn {
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.3s;
+      }
 
-        .period-btn:hover {
-            background: var(--background-light);
-        }
+      .period-btn:hover {
+        background: var(--background-light);
+      }
 
-        .period-btn.active {
-            background: var(--accent-purple);
-            color: white;
-            border-color: var(--accent-purple);
-        }
+      .period-btn.active {
+        background: var(--accent-purple);
+        color: white;
+        border-color: var(--accent-purple);
+      }
     </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📈 Análise de Consumo</h1>
-            <nav>
-                <a href="index.html">Dashboard</a>
-                <a href="painel.html">Painel</a>
-                <a href="dados.html">Dados</a>
-                <a href="consumo.html" class="active">Consumo</a>
-                <a href="abastecimento.html">Abastecimento</a>
-                <a href="manutencao.html">Manutenção</a>
-                <a href="history.html">Histórico</a>
-                <a href="alerts.html">Alertas</a>
-                <a href="config.html">Config</a>
-                <a href="system.html">Sistema</a>
-            </nav>
-        </header>
-
-        <div class="period-selector">
-            <label style="font-weight: 500; color: var(--text-dark);">Período:</label>
-            <button class="period-btn active" onclick="setPeriod('day')">Hoje</button>
-            <button class="period-btn" onclick="setPeriod('week')">7 Dias</button>
-            <button class="period-btn" onclick="setPeriod('month')">30 Dias</button>
-            <button class="period-btn" onclick="setPeriod('custom')">Personalizado</button>
-            <input type="date" id="customDateStart" style="display: none; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px;">
-            <input type="date" id="customDateEnd" style="display: none; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px;">
+  </head>
+  <body>
+    <div class="admin-header">
+      <div class="admin-header-top">
+        <h1>📈 Análise de Consumo - AGUADA</h1>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>● Online</span>
         </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="label">Consumo Total (Hoje)</div>
-                <div class="value" id="consumoTotal">0 m³</div>
-                <div class="change positive" id="consumoChange">▲ 0% vs ontem</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Consumo Médio (Diário)</div>
-                <div class="value" id="consumoMedio">0 L/dia</div>
-                <div class="change" id="consumoMedioChange">— 0%</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Taxa Atual</div>
-                <div class="value" id="taxaAtual">0 L/h</div>
-                <div class="change" id="taxaChange">— 0 L/h</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Pico de Consumo</div>
-                <div class="value" id="picoConsumo">0 L/h</div>
-                <div class="change" id="picoHorario">às --:--</div>
-            </div>
-        </div>
-
-        <div class="chart-grid">
-            <div class="chart-card">
-                <h3>Consumo por Hora (Últimas 24h)</h3>
-                <canvas id="consumoHorarioChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <h3>Consumo por Reservatório</h3>
-                <canvas id="consumoReservatorioChart"></canvas>
-            </div>
-        </div>
-
-        <div class="chart-grid">
-            <div class="chart-card">
-                <h3>Tendência de Consumo (7 dias)</h3>
-                <canvas id="tendenciaChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <h3>Distribuição Horária</h3>
-                <canvas id="distribuicaoChart"></canvas>
-            </div>
-        </div>
-
-        <div class="chart-card" style="margin-bottom: 20px;">
-            <h3>Comparativo Mensal</h3>
-            <canvas id="comparativoChart"></canvas>
-        </div>
+      </div>
+      <nav class="admin-nav">
+        <a href="index.html">Dashboard</a>
+        <a href="mapa.html">Mapa</a>
+        <a href="painel.html">Painel Visual</a>
+        <a href="dados.html">Dados</a>
+        <a href="consumo.html" class="active">Consumo</a>
+        <a href="abastecimento.html">Abastecimento</a>
+        <a href="manutencao.html">Manutenção</a>
+        <a href="history.html">Histórico</a>
+        <a href="alerts.html">Alertas</a>
+        <a href="config.html">Configurações</a>
+        <a href="system.html">Sistema</a>
+        <a href="documentacao.html">Docs</a>
+      </nav>
     </div>
 
+    <div class="main-container">
+      <div class="period-selector">
+        <label style="font-weight: 500; color: var(--text-dark)"
+          >Período:</label
+        >
+        <button class="period-btn active" onclick="setPeriod('day')">
+          Hoje
+        </button>
+        <button class="period-btn" onclick="setPeriod('week')">7 Dias</button>
+        <button class="period-btn" onclick="setPeriod('month')">30 Dias</button>
+        <button class="period-btn" onclick="setPeriod('custom')">
+          Personalizado
+        </button>
+        <input
+          type="date"
+          id="customDateStart"
+          style="
+            display: none;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+          "
+        />
+        <input
+          type="date"
+          id="customDateEnd"
+          style="
+            display: none;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+          "
+        />
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">Consumo Total (Hoje)</div>
+          <div class="value" id="consumoTotal">0 m³</div>
+          <div class="change positive" id="consumoChange">▲ 0% vs ontem</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Consumo Médio (Diário)</div>
+          <div class="value" id="consumoMedio">0 L/dia</div>
+          <div class="change" id="consumoMedioChange">— 0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Taxa Atual</div>
+          <div class="value" id="taxaAtual">0 L/h</div>
+          <div class="change" id="taxaChange">— 0 L/h</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Pico de Consumo</div>
+          <div class="value" id="picoConsumo">0 L/h</div>
+          <div class="change" id="picoHorario">às --:--</div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Consumo por Hora (Últimas 24h)</h3>
+          <canvas id="consumoHorarioChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Consumo por Reservatório</h3>
+          <canvas id="consumoReservatorioChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Tendência de Consumo (7 dias)</h3>
+          <canvas id="tendenciaChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Distribuição Horária</h3>
+          <canvas id="distribuicaoChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" style="margin-bottom: 20px">
+        <h3>Comparativo Mensal</h3>
+        <canvas id="comparativoChart"></canvas>
+      </div>
+    </div>
+
+    <script src="assets/layout.js"></script>
     <script src="assets/api-service.js"></script>
     <script src="assets/ui-utils.js"></script>
     <script src="assets/app.js"></script>
     <script>
-        let currentPeriod = 'day';
-        let charts = {};
+      let currentPeriod = "day";
+      let charts = {};
 
-        // Initialize charts
-        async function initCharts() {
-            // Consumo por Hora
-            const ctx1 = document.getElementById('consumoHorarioChart').getContext('2d');
-            charts.consumoHorario = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
-                    datasets: [{
-                        label: 'Consumo (L)',
-                        data: await fetchHourlyConsumption(),
-                        backgroundColor: 'rgba(103, 126, 234, 0.7)',
-                        borderColor: 'rgba(103, 126, 234, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'Litros' }
-                        }
-                    }
-                }
-            });
+      // Initialize charts
+      async function initCharts() {
+        // Consumo por Hora
+        const ctx1 = document
+          .getElementById("consumoHorarioChart")
+          .getContext("2d");
+        charts.consumoHorario = new Chart(ctx1, {
+          type: "bar",
+          data: {
+            labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+            datasets: [
+              {
+                label: "Consumo (L)",
+                data: await fetchHourlyConsumption(),
+                backgroundColor: "rgba(103, 126, 234, 0.7)",
+                borderColor: "rgba(103, 126, 234, 1)",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "Litros" },
+              },
+            },
+          },
+        });
 
-            // Consumo por Reservatório
-            const ctx2 = document.getElementById('consumoReservatorioChart').getContext('2d');
-            const reservoirData = await fetchReservoirConsumption();
-            charts.consumoReservatorio = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'],
-                    datasets: [{
-                        data: reservoirData,
-                        backgroundColor: [
-                            'rgba(30, 60, 114, 0.8)',
-                            'rgba(103, 126, 234, 0.8)',
-                            'rgba(118, 75, 162, 0.8)',
-                            'rgba(16, 185, 129, 0.8)',
-                            'rgba(245, 158, 11, 0.8)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { position: 'bottom' }
-                    }
-                }
-            });
+        // Consumo por Reservatório
+        const ctx2 = document
+          .getElementById("consumoReservatorioChart")
+          .getContext("2d");
+        const reservoirData = await fetchReservoirConsumption();
+        charts.consumoReservatorio = new Chart(ctx2, {
+          type: "doughnut",
+          data: {
+            labels: ["RCON", "RCAV", "RB03", "IE01", "IE02"],
+            datasets: [
+              {
+                data: reservoirData,
+                backgroundColor: [
+                  "rgba(30, 60, 114, 0.8)",
+                  "rgba(103, 126, 234, 0.8)",
+                  "rgba(118, 75, 162, 0.8)",
+                  "rgba(16, 185, 129, 0.8)",
+                  "rgba(245, 158, 11, 0.8)",
+                ],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: "bottom" },
+            },
+          },
+        });
 
-            // Tendência (7 dias)
-            const ctx3 = document.getElementById('tendenciaChart').getContext('2d');
-            const dailyData = await fetchDailyConsumption(7);
-            charts.tendencia = new Chart(ctx3, {
-                type: 'line',
-                data: {
-                    labels: dailyData.labels,
-                    datasets: [{
-                        label: 'Consumo (m³)',
-                        data: dailyData.values,
-                        borderColor: 'rgba(103, 126, 234, 1)',
-                        backgroundColor: 'rgba(103, 126, 234, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'm³' }
-                        }
-                    }
-                }
-            });
+        // Tendência (7 dias)
+        const ctx3 = document.getElementById("tendenciaChart").getContext("2d");
+        const dailyData = await fetchDailyConsumption(7);
+        charts.tendencia = new Chart(ctx3, {
+          type: "line",
+          data: {
+            labels: dailyData.labels,
+            datasets: [
+              {
+                label: "Consumo (m³)",
+                data: dailyData.values,
+                borderColor: "rgba(103, 126, 234, 1)",
+                backgroundColor: "rgba(103, 126, 234, 0.1)",
+                tension: 0.4,
+                fill: true,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "m³" },
+              },
+            },
+          },
+        });
 
-            // Distribuição Horária
-            const ctx4 = document.getElementById('distribuicaoChart').getContext('2d');
-            charts.distribuicao = new Chart(ctx4, {
-                type: 'radar',
-                data: {
-                    labels: ['0-4h', '4-8h', '8-12h', '12-16h', '16-20h', '20-24h'],
-                    datasets: [{
-                        label: 'Média de Consumo',
-                        data: [10, 20, 45, 60, 50, 25],
-                        borderColor: 'rgba(103, 126, 234, 1)',
-                        backgroundColor: 'rgba(103, 126, 234, 0.2)',
-                        pointBackgroundColor: 'rgba(103, 126, 234, 1)'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        r: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
+        // Distribuição Horária
+        const ctx4 = document
+          .getElementById("distribuicaoChart")
+          .getContext("2d");
+        charts.distribuicao = new Chart(ctx4, {
+          type: "radar",
+          data: {
+            labels: ["0-4h", "4-8h", "8-12h", "12-16h", "16-20h", "20-24h"],
+            datasets: [
+              {
+                label: "Média de Consumo",
+                data: [10, 20, 45, 60, 50, 25],
+                borderColor: "rgba(103, 126, 234, 1)",
+                backgroundColor: "rgba(103, 126, 234, 0.2)",
+                pointBackgroundColor: "rgba(103, 126, 234, 1)",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+              r: {
+                beginAtZero: true,
+              },
+            },
+          },
+        });
 
-            // Comparativo Mensal
-            const ctx5 = document.getElementById('comparativoChart').getContext('2d');
-            charts.comparativo = new Chart(ctx5, {
-                type: 'bar',
-                data: {
-                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
-                    datasets: [
-                        {
-                            label: '2024',
-                            data: generateMockMonthlyData(),
-                            backgroundColor: 'rgba(103, 126, 234, 0.7)'
-                        },
-                        {
-                            label: '2025',
-                            data: generateMockMonthlyData(),
-                            backgroundColor: 'rgba(118, 75, 162, 0.7)'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'm³' }
-                        }
-                    }
-                }
-            });
-        }
+        // Comparativo Mensal
+        const ctx5 = document
+          .getElementById("comparativoChart")
+          .getContext("2d");
+        charts.comparativo = new Chart(ctx5, {
+          type: "bar",
+          data: {
+            labels: [
+              "Jan",
+              "Fev",
+              "Mar",
+              "Abr",
+              "Mai",
+              "Jun",
+              "Jul",
+              "Ago",
+              "Set",
+              "Out",
+              "Nov",
+              "Dez",
+            ],
+            datasets: [
+              {
+                label: "2024",
+                data: generateMockMonthlyData(),
+                backgroundColor: "rgba(103, 126, 234, 0.7)",
+              },
+              {
+                label: "2025",
+                data: generateMockMonthlyData(),
+                backgroundColor: "rgba(118, 75, 162, 0.7)",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "m³" },
+              },
+            },
+          },
+        });
+      }
 
-        // Update statistics
-        async function updateStats() {
-            try {
-                if (!window.apiService) {
-                    console.warn('[Consumo] API Service não disponível');
-                    return;
+      // Update statistics
+      async function updateStats() {
+        try {
+          if (!window.apiService) {
+            console.warn("[Consumo] API Service não disponível");
+            return;
+          }
+
+          // Buscar estatísticas do backend
+          const baseURL =
+            window.apiService.baseURL || "http://localhost:3000/api";
+
+          // Buscar estatísticas diárias
+          const statsResponse = await fetch(`${baseURL}/stats/daily`);
+          const stats = await statsResponse.json();
+
+          // Buscar leituras atuais para calcular consumo
+          const readings = await window.apiService.getLatestReadings();
+
+          if (stats.success && stats.data) {
+            const data = stats.data;
+
+            // Calcular consumo total a partir das leituras
+            let totalVolume = 0;
+            if (readings) {
+              Object.entries(readings).forEach(([id, r]) => {
+                if (r.distance_cm && window.SENSORS && window.SENSORS[id]) {
+                  // Usar função de cálculo de volume se disponível
+                  if (typeof calculateVolumeM3 === "function") {
+                    totalVolume += calculateVolumeM3(id, r.distance_cm);
+                  } else {
+                    // Fallback simples
+                    totalVolume += (r.distance_cm / 100) * 0.1; // Aproximação
+                  }
                 }
-                
-                // Buscar estatísticas do backend
-                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
-                
-                // Buscar estatísticas diárias
-                const statsResponse = await fetch(`${baseURL}/stats/daily`);
-                const stats = await statsResponse.json();
-                
-                // Buscar leituras atuais para calcular consumo
-                const readings = await window.apiService.getLatestReadings();
-                
-                if (stats.success && stats.data) {
-                    const data = stats.data;
-                    
-                    // Calcular consumo total a partir das leituras
-                    let totalVolume = 0;
-                    if (readings) {
-                        Object.entries(readings).forEach(([id, r]) => {
-                            if (r.distance_cm && window.SENSORS && window.SENSORS[id]) {
-                                // Usar função de cálculo de volume se disponível
-                                if (typeof calculateVolumeM3 === 'function') {
-                                    totalVolume += calculateVolumeM3(id, r.distance_cm);
-                                } else {
-                                    // Fallback simples
-                                    totalVolume += (r.distance_cm / 100) * 0.1; // Aproximação
-                                }
-                            }
-                        });
-                    }
-                    
-                    document.getElementById('consumoTotal').textContent = `${totalVolume.toFixed(1)} m³`;
-                    
-                    // Calcular consumo médio diário (simplificado)
-                    const avgDaily = totalVolume > 0 ? (totalVolume * 1000 / 24).toFixed(0) : '0';
-                    document.getElementById('consumoMedio').textContent = `${avgDaily} L/dia`;
-                    
-                    // Taxa atual (simplificada)
-                    const currentRate = data.current_rate || 0;
-                    document.getElementById('taxaAtual').textContent = `${currentRate.toFixed(0)} L/h`;
-                    
-                    // Pico de consumo
-                    const peakConsumption = data.peak_consumption || 0;
-                    document.getElementById('picoConsumo').textContent = `${peakConsumption.toFixed(0)} L/h`;
-                    
-                    if (data.peak_hour !== undefined) {
-                        document.getElementById('picoHorario').textContent = `às ${data.peak_hour}:00`;
-                    } else {
-                        document.getElementById('picoHorario').textContent = '—';
-                    }
-                    
-                    // Update changes
-                    const change = data.change_percent || 0;
-                    const changeEl = document.getElementById('consumoChange');
-                    changeEl.textContent = `${change > 0 ? '▲' : change < 0 ? '▼' : '—'} ${Math.abs(change).toFixed(1)}% vs ontem`;
-                    changeEl.className = change > 0 ? 'change positive' : change < 0 ? 'change negative' : 'change';
-                } else {
-                    // Fallback: calcular a partir das leituras
-                    if (readings) {
-                        let total = 0;
-                        Object.entries(readings).forEach(([id, r]) => {
-                            if (r.distance_cm && typeof calculateVolumeM3 === 'function') {
-                                total += calculateVolumeM3(id, r.distance_cm);
-                            }
-                        });
-                        document.getElementById('consumoTotal').textContent = `${total.toFixed(1)} m³`;
-                    }
-                }
-            } catch (error) {
-                console.error('[Consumo] Erro ao atualizar estatísticas:', error);
+              });
             }
-        }
 
-        function setPeriod(period) {
-            currentPeriod = period;
-            
-            // Update button states
-            document.querySelectorAll('.period-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
+            document.getElementById(
+              "consumoTotal"
+            ).textContent = `${totalVolume.toFixed(1)} m³`;
 
-            if (period === 'custom') {
-                document.getElementById('customDateStart').style.display = 'inline-block';
-                document.getElementById('customDateEnd').style.display = 'inline-block';
+            // Calcular consumo médio diário (simplificado)
+            const avgDaily =
+              totalVolume > 0 ? ((totalVolume * 1000) / 24).toFixed(0) : "0";
+            document.getElementById(
+              "consumoMedio"
+            ).textContent = `${avgDaily} L/dia`;
+
+            // Taxa atual (simplificada)
+            const currentRate = data.current_rate || 0;
+            document.getElementById(
+              "taxaAtual"
+            ).textContent = `${currentRate.toFixed(0)} L/h`;
+
+            // Pico de consumo
+            const peakConsumption = data.peak_consumption || 0;
+            document.getElementById(
+              "picoConsumo"
+            ).textContent = `${peakConsumption.toFixed(0)} L/h`;
+
+            if (data.peak_hour !== undefined) {
+              document.getElementById(
+                "picoHorario"
+              ).textContent = `às ${data.peak_hour}:00`;
             } else {
-                document.getElementById('customDateStart').style.display = 'none';
-                document.getElementById('customDateEnd').style.display = 'none';
+              document.getElementById("picoHorario").textContent = "—";
             }
 
-            // Update charts based on period
-            updateCharts();
+            // Update changes
+            const change = data.change_percent || 0;
+            const changeEl = document.getElementById("consumoChange");
+            changeEl.textContent = `${
+              change > 0 ? "▲" : change < 0 ? "▼" : "—"
+            } ${Math.abs(change).toFixed(1)}% vs ontem`;
+            changeEl.className =
+              change > 0
+                ? "change positive"
+                : change < 0
+                ? "change negative"
+                : "change";
+          } else {
+            // Fallback: calcular a partir das leituras
+            if (readings) {
+              let total = 0;
+              Object.entries(readings).forEach(([id, r]) => {
+                if (r.distance_cm && typeof calculateVolumeM3 === "function") {
+                  total += calculateVolumeM3(id, r.distance_cm);
+                }
+              });
+              document.getElementById(
+                "consumoTotal"
+              ).textContent = `${total.toFixed(1)} m³`;
+            }
+          }
+        } catch (error) {
+          console.error("[Consumo] Erro ao atualizar estatísticas:", error);
+        }
+      }
+
+      function setPeriod(period) {
+        currentPeriod = period;
+
+        // Update button states
+        document.querySelectorAll(".period-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        if (period === "custom") {
+          document.getElementById("customDateStart").style.display =
+            "inline-block";
+          document.getElementById("customDateEnd").style.display =
+            "inline-block";
+        } else {
+          document.getElementById("customDateStart").style.display = "none";
+          document.getElementById("customDateEnd").style.display = "none";
         }
 
-        async function updateCharts() {
-            // Update chart data based on selected period
-            try {
-                const period = currentPeriod === 'day' ? '24h' : currentPeriod === 'week' ? '7d' : '30d';
-                const hourlyData = await fetchHourlyConsumption();
-                const dailyData = await fetchDailyConsumption(period === '24h' ? 1 : period === '7d' ? 7 : 30);
-                
-                if (charts.consumoHorario) {
-                    charts.consumoHorario.data.datasets[0].data = hourlyData;
-                    charts.consumoHorario.update();
-                }
-                
-                if (charts.tendencia) {
-                    charts.tendencia.data.labels = dailyData.labels;
-                    charts.tendencia.data.datasets[0].data = dailyData.values;
-                    charts.tendencia.update();
-                }
-                
-                updateStats();
-            } catch (error) {
-                console.error('[Consumo] Erro ao atualizar gráficos:', error);
-            }
-        }
+        // Update charts based on period
+        updateCharts();
+      }
 
-        // Fetch real data from API
-        async function fetchHourlyConsumption() {
-            try {
-                if (!window.apiService) {
-                    console.warn('[Consumo] API Service não disponível, usando dados vazios');
-                    return Array(24).fill(0);
-                }
-                
-                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
-                const response = await fetch(`${baseURL}/stats/consumption?period=24h&group_by=hour`);
-                const result = await response.json();
-                
-                if (result.success && result.data) {
-                    // Processar dados por hora
-                    const hourlyData = Array(24).fill(0);
-                    result.data.forEach(item => {
-                        const hour = new Date(item.period).getHours();
-                        hourlyData[hour] = parseFloat(item.avg_value || 0);
-                    });
-                    return hourlyData;
-                }
-                
-                return Array(24).fill(0);
-            } catch (error) {
-                console.error('[Consumo] Erro ao buscar consumo horário:', error);
-                return Array(24).fill(0);
-            }
-        }
+      async function updateCharts() {
+        // Update chart data based on selected period
+        try {
+          const period =
+            currentPeriod === "day"
+              ? "24h"
+              : currentPeriod === "week"
+              ? "7d"
+              : "30d";
+          const hourlyData = await fetchHourlyConsumption();
+          const dailyData = await fetchDailyConsumption(
+            period === "24h" ? 1 : period === "7d" ? 7 : 30
+          );
 
-        async function fetchDailyConsumption(days = 7) {
-            try {
-                if (!window.apiService) {
-                    console.warn('[Consumo] API Service não disponível, usando dados vazios');
-                    return { labels: generateDayLabels(days), values: Array(days).fill(0) };
-                }
-                
-                const period = days === 1 ? '24h' : days === 7 ? '7d' : '30d';
-                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
-                const response = await fetch(`${baseURL}/stats/consumption?period=${period}&group_by=day`);
-                const result = await response.json();
-                
-                if (result.success && result.data) {
-                    const labels = [];
-                    const values = [];
-                    
-                    result.data.forEach(item => {
-                        const date = new Date(item.period);
-                        labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-                        values.push(parseFloat(item.avg_value || 0));
-                    });
-                    
-                    return { labels, values };
-                }
-                
-                return { labels: generateDayLabels(days), values: Array(days).fill(0) };
-            } catch (error) {
-                console.error('[Consumo] Erro ao buscar consumo diário:', error);
-                return { labels: generateDayLabels(days), values: Array(days).fill(0) };
-            }
-        }
+          if (charts.consumoHorario) {
+            charts.consumoHorario.data.datasets[0].data = hourlyData;
+            charts.consumoHorario.update();
+          }
 
-        async function fetchReservoirConsumption() {
-            try {
-                if (!window.apiService) {
-                    return [0, 0, 0, 0, 0];
-                }
-                
-                const readings = await window.apiService.getLatestReadings();
-                if (!readings) return [0, 0, 0, 0, 0];
-                
-                // Calcular volume atual de cada reservatório
-                const consumption = ['RCON', 'RCAV', 'RB03', 'IE01', 'IE02'].map(id => {
-                    const reading = readings[id];
-                    if (!reading || !reading.distance_cm) return 0;
-                    
-                    // Usar função de cálculo de volume se disponível
-                    if (typeof calculateVolumeM3 === 'function') {
-                        return calculateVolumeM3(id, reading.distance_cm) * 1000; // Converter para litros
-                    } else {
-                        // Fallback: usar distância como aproximação
-                        return (reading.distance_cm / 100) * 10;
-                    }
-                });
-                
-                return consumption;
-            } catch (error) {
-                console.error('[Consumo] Erro ao buscar consumo por reservatório:', error);
-                return [0, 0, 0, 0, 0];
-            }
+          if (charts.tendencia) {
+            charts.tendencia.data.labels = dailyData.labels;
+            charts.tendencia.data.datasets[0].data = dailyData.values;
+            charts.tendencia.update();
+          }
+
+          updateStats();
+        } catch (error) {
+          console.error("[Consumo] Erro ao atualizar gráficos:", error);
         }
-        
-        // Função auxiliar para calcular volume (se não estiver disponível globalmente)
-        function calculateVolumeM3(sensorId, distance_cm) {
-            if (typeof window.getVolumePercent === 'function' && typeof window.getReservoirConfig === 'function') {
-                // Usar funções globais se disponíveis
-                const percent = window.getVolumePercent(sensorId, distance_cm);
-                const config = window.getReservoirConfig(sensorId);
-                if (config) {
-                    return (percent / 100) * config.volume_max_m3;
-                }
-            }
-            
-            // Fallback: configuração básica
-            const reservoirs = {
-                'RCON': { nivel_max_cm: 450, volume_max_m3: 80.0, area_m2: 80.0 / 4.5, offset_sensor_cm: 20.0 },
-                'RCAV': { nivel_max_cm: 450, volume_max_m3: 80.0, area_m2: 80.0 / 4.5, offset_sensor_cm: 20.0 },
-                'RB03': { nivel_max_cm: 450, volume_max_m3: 80.0, area_m2: 80.0 / 4.5, offset_sensor_cm: 20.0 },
-                'IE01': { nivel_max_cm: 240, volume_max_m3: 250.0, area_m2: 250.0 / 2.4, offset_sensor_cm: 20.0 },
-                'IE02': { nivel_max_cm: 240, volume_max_m3: 250.0, area_m2: 250.0 / 2.4, offset_sensor_cm: 20.0 }
+      }
+
+      // Fetch real data from API
+      async function fetchHourlyConsumption() {
+        try {
+          if (!window.apiService) {
+            console.warn(
+              "[Consumo] API Service não disponível, usando dados vazios"
+            );
+            return Array(24).fill(0);
+          }
+
+          const baseURL =
+            window.apiService.baseURL || "http://localhost:3000/api";
+          const response = await fetch(
+            `${baseURL}/stats/consumption?period=24h&group_by=hour`
+          );
+          const result = await response.json();
+
+          if (result.success && result.data) {
+            // Processar dados por hora
+            const hourlyData = Array(24).fill(0);
+            result.data.forEach((item) => {
+              const hour = new Date(item.period).getHours();
+              hourlyData[hour] = parseFloat(item.avg_value || 0);
+            });
+            return hourlyData;
+          }
+
+          return Array(24).fill(0);
+        } catch (error) {
+          console.error("[Consumo] Erro ao buscar consumo horário:", error);
+          return Array(24).fill(0);
+        }
+      }
+
+      async function fetchDailyConsumption(days = 7) {
+        try {
+          if (!window.apiService) {
+            console.warn(
+              "[Consumo] API Service não disponível, usando dados vazios"
+            );
+            return {
+              labels: generateDayLabels(days),
+              values: Array(days).fill(0),
             };
-            
-            const reservoir = reservoirs[sensorId];
-            if (!reservoir || !distance_cm || distance_cm <= 0) return 0;
-            
-            const nivel_cm = reservoir.nivel_max_cm - distance_cm + reservoir.offset_sensor_cm;
-            if (nivel_cm <= 0) return 0;
-            
-            const volume_m3 = reservoir.area_m2 * (nivel_cm / 100);
-            return Math.max(0, Math.min(volume_m3, reservoir.volume_max_m3));
-        }
+          }
 
-        function generateDayLabels(days) {
+          const period = days === 1 ? "24h" : days === 7 ? "7d" : "30d";
+          const baseURL =
+            window.apiService.baseURL || "http://localhost:3000/api";
+          const response = await fetch(
+            `${baseURL}/stats/consumption?period=${period}&group_by=day`
+          );
+          const result = await response.json();
+
+          if (result.success && result.data) {
             const labels = [];
-            for (let i = days - 1; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+            const values = [];
+
+            result.data.forEach((item) => {
+              const date = new Date(item.period);
+              labels.push(
+                date.toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })
+              );
+              values.push(parseFloat(item.avg_value || 0));
+            });
+
+            return { labels, values };
+          }
+
+          return {
+            labels: generateDayLabels(days),
+            values: Array(days).fill(0),
+          };
+        } catch (error) {
+          console.error("[Consumo] Erro ao buscar consumo diário:", error);
+          return {
+            labels: generateDayLabels(days),
+            values: Array(days).fill(0),
+          };
+        }
+      }
+
+      async function fetchReservoirConsumption() {
+        try {
+          if (!window.apiService) {
+            return [0, 0, 0, 0, 0];
+          }
+
+          const readings = await window.apiService.getLatestReadings();
+          if (!readings) return [0, 0, 0, 0, 0];
+
+          // Calcular volume atual de cada reservatório
+          const consumption = ["RCON", "RCAV", "RB03", "IE01", "IE02"].map(
+            (id) => {
+              const reading = readings[id];
+              if (!reading || !reading.distance_cm) return 0;
+
+              // Usar função de cálculo de volume se disponível
+              if (typeof calculateVolumeM3 === "function") {
+                return calculateVolumeM3(id, reading.distance_cm) * 1000; // Converter para litros
+              } else {
+                // Fallback: usar distância como aproximação
+                return (reading.distance_cm / 100) * 10;
+              }
             }
-            return labels;
+          );
+
+          return consumption;
+        } catch (error) {
+          console.error(
+            "[Consumo] Erro ao buscar consumo por reservatório:",
+            error
+          );
+          return [0, 0, 0, 0, 0];
+        }
+      }
+
+      // Função auxiliar para calcular volume (se não estiver disponível globalmente)
+      function calculateVolumeM3(sensorId, distance_cm) {
+        if (
+          typeof window.getVolumePercent === "function" &&
+          typeof window.getReservoirConfig === "function"
+        ) {
+          // Usar funções globais se disponíveis
+          const percent = window.getVolumePercent(sensorId, distance_cm);
+          const config = window.getReservoirConfig(sensorId);
+          if (config) {
+            return (percent / 100) * config.volume_max_m3;
+          }
         }
 
-        // Initialize
-        async function init() {
-            await initCharts();
-            await updateStats();
+        // Fallback: configuração básica
+        const reservoirs = {
+          RCON: {
+            nivel_max_cm: 450,
+            volume_max_m3: 80.0,
+            area_m2: 80.0 / 4.5,
+            offset_sensor_cm: 20.0,
+          },
+          RCAV: {
+            nivel_max_cm: 450,
+            volume_max_m3: 80.0,
+            area_m2: 80.0 / 4.5,
+            offset_sensor_cm: 20.0,
+          },
+          RB03: {
+            nivel_max_cm: 450,
+            volume_max_m3: 80.0,
+            area_m2: 80.0 / 4.5,
+            offset_sensor_cm: 20.0,
+          },
+          IE01: {
+            nivel_max_cm: 240,
+            volume_max_m3: 250.0,
+            area_m2: 250.0 / 2.4,
+            offset_sensor_cm: 20.0,
+          },
+          IE02: {
+            nivel_max_cm: 240,
+            volume_max_m3: 250.0,
+            area_m2: 250.0 / 2.4,
+            offset_sensor_cm: 20.0,
+          },
+        };
+
+        const reservoir = reservoirs[sensorId];
+        if (!reservoir || !distance_cm || distance_cm <= 0) return 0;
+
+        const nivel_cm =
+          reservoir.nivel_max_cm - distance_cm + reservoir.offset_sensor_cm;
+        if (nivel_cm <= 0) return 0;
+
+        const volume_m3 = reservoir.area_m2 * (nivel_cm / 100);
+        return Math.max(0, Math.min(volume_m3, reservoir.volume_max_m3));
+      }
+
+      function generateDayLabels(days) {
+        const labels = [];
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          labels.push(
+            date.toLocaleDateString("pt-BR", {
+              day: "2-digit",
+              month: "2-digit",
+            })
+          );
         }
-        
-        init();
+        return labels;
+      }
+
+      // Initialize
+      async function init() {
+        await initCharts();
+        await updateStats();
+      }
+
+      init();
     </script>
-</body>
+  </body>
 </html>

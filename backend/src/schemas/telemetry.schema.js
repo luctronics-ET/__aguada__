@@ -7,24 +7,34 @@ const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
 const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
 
 // Individual variable transmission schema (firmware format)
-// Example: {"mac":"20:6E:F1:6B:77:58","type":"distance_cm","value":2448,"battery":5000,"uptime":3,"rssi":-50}
-export const individualTelemetrySchema = z.object({
-  mac: z.string().regex(macRegex, 'MAC inválido (formato: AA:BB:CC:DD:EE:FF)'),
-  
-  type: z.enum(['distance_cm', 'valve_in', 'valve_out', 'sound_in'], {
-    errorMap: () => ({ message: 'Tipo inválido. Use: distance_cm, valve_in, valve_out, sound_in' })
+// Suporta dois formatos:
+// 1. Formato antigo: {"mac":"...","type":"distance_cm","value":2448,"battery":5000,"uptime":3,"rssi":-50}
+// 2. Formato AGUADA-1: {"mac":"...","distance_mm":2450,"vcc_bat_mv":4900,"rssi":-50}
+export const individualTelemetrySchema = z.union([
+  // Formato antigo (com type)
+  z.object({
+    mac: z.string().regex(macRegex, 'MAC inválido (formato: AA:BB:CC:DD:EE:FF)'),
+    type: z.enum(['distance_cm', 'valve_in', 'valve_out', 'sound_in'], {
+      errorMap: () => ({ message: 'Tipo inválido. Use: distance_cm, valve_in, valve_out, sound_in' })
+    }),
+    value: z.number().int()
+      .refine((val) => !isNaN(val), 'Valor deve ser numérico')
+      .refine((val) => isFinite(val), 'Valor deve ser finito'),
+    battery: z.number().int().min(0).max(6000).optional(), // mV (0-6V)
+    rssi: z.number().int().min(-120).max(0).optional(), // dBm
+    uptime: z.number().int().nonnegative().optional(), // seconds
   }),
-  
-  value: z.number().int()
-    .refine((val) => !isNaN(val), 'Valor deve ser numérico')
-    .refine((val) => isFinite(val), 'Valor deve ser finito'),
-  
-  battery: z.number().int().min(0).max(6000).optional(), // mV (0-6V)
-  
-  rssi: z.number().int().min(-120).max(0).optional(), // dBm
-  
-  uptime: z.number().int().nonnegative().optional(), // seconds
-});
+  // Formato AGUADA-1 (sem type, sempre distance_mm)
+  z.object({
+    mac: z.string().regex(macRegex, 'MAC inválido (formato: AA:BB:CC:DD:EE:FF)'),
+    distance_mm: z.number().int()
+      .refine((val) => !isNaN(val), 'Valor deve ser numérico')
+      .refine((val) => isFinite(val), 'Valor deve ser finito')
+      .refine((val) => val >= 0, 'Distância deve ser não-negativa'),
+    vcc_bat_mv: z.number().int().min(0).max(6000).optional(), // mV (0-6V)
+    rssi: z.number().int().min(-120).max(0).optional(), // dBm
+  }),
+]);
 
 // Legacy aggregated telemetry schema (for compatibility)
 export const telemetrySchema = z.object({

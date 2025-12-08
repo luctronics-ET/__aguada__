@@ -1,495 +1,650 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Alertas - AGUADA Dashboard</title>
-    <link rel="stylesheet" href="assets/style.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🚨 Alertas e Eventos</h1>
-            <nav>
-                <a href="index.html">Dashboard</a>
-                <a href="painel.html">Painel</a>
-                <a href="dados.html">Dados</a>
-                <a href="consumo.html">Consumo</a>
-                <a href="abastecimento.html">Abastecimento</a>
-                <a href="manutencao.html">Manutenção</a>
-                <a href="history.html">Histórico</a>
-                <a href="alerts.html" class="active">Alertas</a>
-                <a href="config.html">Config</a>
-                <a href="system.html">Sistema</a>
-            </nav>
-            <div class="header-info">
-                <div>Sistema de Monitoramento Hidráulico</div>
-                <div class="status-badge status-online pulsing">● Online</div>
-            </div>
-        </header>
-
-        <div class="dashboard-grid">
-            <div class="card">
-                <div class="card-header">
-                    <span>Alertas Ativos</span>
-                    <span style="background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 4px; font-size: 12px;" id="activeAlerts">3</span>
-                </div>
-                <div class="card-body" id="activeAlertsContainer">
-                    <div style="text-align: center; padding: 40px; color: #999;">
-                        ⏳ Carregando alertas ativos...
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <span>Resumo de Eventos</span>
-                </div>
-                <div class="card-body">
-                    <div class="data-row" style="margin-bottom: 10px;">
-                        <div class="data-item">
-                            <div class="data-label">🔴 Críticos (24h)</div>
-                            <div class="data-value" id="summaryCritical">-</div>
-                        </div>
-                        <div class="data-item">
-                            <div class="data-label">🟡 Avisos (24h)</div>
-                            <div class="data-value" id="summaryWarning">-</div>
-                        </div>
-                    </div>
-                    <div class="data-row">
-                        <div class="data-item">
-                            <div class="data-label">ℹ️ Informativos (24h)</div>
-                            <div class="data-value" id="summaryInfo">-</div>
-                        </div>
-                        <div class="data-item">
-                            <div class="data-label">✅ Resolvidos (24h)</div>
-                            <div class="data-value" id="summaryResolved">-</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <div class="admin-header">
+      <div class="admin-header-top">
+        <h1>🚨 Alertas e Eventos - AGUADA</h1>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>● Online</span>
         </div>
-
-        <div class="card" style="margin-bottom: 30px;">
-            <div class="card-header">
-                <span>Histórico de Eventos (Últimos 30 dias)</span>
-                <span style="font-size: 12px;">287 eventos</span>
-            </div>
-            <div class="card-body">
-                <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn-primary" onclick="filterEvents('all')" style="font-size: 12px; padding: 6px 12px;">Todos</button>
-                    <button class="btn-primary" onclick="filterEvents('critical')" style="font-size: 12px; padding: 6px 12px; background: #ef4444;">🔴 Críticos</button>
-                    <button class="btn-primary" onclick="filterEvents('warning')" style="font-size: 12px; padding: 6px 12px; background: #f59e0b;">🟡 Avisos</button>
-                    <button class="btn-primary" onclick="filterEvents('info')" style="font-size: 12px; padding: 6px 12px; background: #06b6d4;">ℹ️ Info</button>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data/Hora</th>
-                            <th>Nível</th>
-                            <th>Sensor</th>
-                            <th>Evento</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="eventsTable">
-                        <tr>
-                            <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
-                                ⏳ Carregando eventos...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="card" style="margin-bottom: 30px;">
-            <div class="card-header">
-                <span>Notificações e Preferências</span>
-            </div>
-            <div class="card-body">
-                <form style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                    <div>
-                        <label style="display: flex; align-items: center; gap: 10px; font-weight: normal; cursor: pointer;">
-                            <input type="checkbox" checked>
-                            <span>Alertar em nível crítico (e-mail)</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px; font-weight: normal; cursor: pointer; margin-top: 8px;">
-                            <input type="checkbox" checked>
-                            <span>Alertar em avisos de consumo</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px; font-weight: normal; cursor: pointer; margin-top: 8px;">
-                            <input type="checkbox" checked>
-                            <span>Notificações de manutenção</span>
-                        </label>
-                    </div>
-
-                    <div>
-                        <label>E-mail para Alertas</label>
-                        <input type="email" placeholder="admin@aguada.com" value="admin@aguada.com">
-                    </div>
-
-                    <div>
-                        <label>Telefone (WhatsApp)</label>
-                        <input type="tel" placeholder="(11) 99999-9999" value="(11) 98765-4321">
-                    </div>
-
-                    <div style="grid-column: 1 / -1;">
-                        <button type="button" class="btn-success">💾 Salvar Preferências</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div class="stats-footer">
-            <div class="stat">
-                <div class="stat-value" id="footerTotalEvents">-</div>
-                <div class="stat-label">Total de Eventos</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="footerActiveAlerts">-</div>
-                <div class="stat-label">Alertas Ativos</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="footerResolutionRate">-</div>
-                <div class="stat-label">Taxa de Resolução</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="footerAvgResolution">-</div>
-                <div class="stat-label">Tempo Médio de Resolução</div>
-            </div>
-        </div>
+      </div>
+      <nav class="admin-nav">
+        <a href="index.html">Dashboard</a>
+        <a href="mapa.html">Mapa</a>
+        <a href="painel.html">Painel Visual</a>
+        <a href="dados.html">Dados</a>
+        <a href="consumo.html">Consumo</a>
+        <a href="abastecimento.html">Abastecimento</a>
+        <a href="manutencao.html">Manutenção</a>
+        <a href="history.html">Histórico</a>
+        <a href="alerts.html" class="active">Alertas</a>
+        <a href="config.html">Configurações</a>
+        <a href="system.html">Sistema</a>
+        <a href="documentacao.html">Docs</a>
+      </nav>
     </div>
 
+    <div class="main-container">
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-header">
+            <span>Alertas Ativos</span>
+            <span
+              style="
+                background: rgba(255, 255, 255, 0.2);
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+              "
+              id="activeAlerts"
+              >3</span
+            >
+          </div>
+          <div class="card-body" id="activeAlertsContainer">
+            <div style="text-align: center; padding: 40px; color: #999">
+              ⏳ Carregando alertas ativos...
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span>Resumo de Eventos</span>
+          </div>
+          <div class="card-body">
+            <div class="data-row" style="margin-bottom: 10px">
+              <div class="data-item">
+                <div class="data-label">🔴 Críticos (24h)</div>
+                <div class="data-value" id="summaryCritical">-</div>
+              </div>
+              <div class="data-item">
+                <div class="data-label">🟡 Avisos (24h)</div>
+                <div class="data-value" id="summaryWarning">-</div>
+              </div>
+            </div>
+            <div class="data-row">
+              <div class="data-item">
+                <div class="data-label">ℹ️ Informativos (24h)</div>
+                <div class="data-value" id="summaryInfo">-</div>
+              </div>
+              <div class="data-item">
+                <div class="data-label">✅ Resolvidos (24h)</div>
+                <div class="data-value" id="summaryResolved">-</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 30px">
+        <div class="card-header">
+          <span>Histórico de Eventos (Últimos 30 dias)</span>
+          <span style="font-size: 12px">287 eventos</span>
+        </div>
+        <div class="card-body">
+          <div
+            style="
+              margin-bottom: 15px;
+              display: flex;
+              gap: 10px;
+              flex-wrap: wrap;
+            "
+          >
+            <button
+              class="btn-primary"
+              onclick="filterEvents('all')"
+              style="font-size: 12px; padding: 6px 12px"
+            >
+              Todos
+            </button>
+            <button
+              class="btn-primary"
+              onclick="filterEvents('critical')"
+              style="font-size: 12px; padding: 6px 12px; background: #ef4444"
+            >
+              🔴 Críticos
+            </button>
+            <button
+              class="btn-primary"
+              onclick="filterEvents('warning')"
+              style="font-size: 12px; padding: 6px 12px; background: #f59e0b"
+            >
+              🟡 Avisos
+            </button>
+            <button
+              class="btn-primary"
+              onclick="filterEvents('info')"
+              style="font-size: 12px; padding: 6px 12px; background: #06b6d4"
+            >
+              ℹ️ Info
+            </button>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Data/Hora</th>
+                <th>Nível</th>
+                <th>Sensor</th>
+                <th>Evento</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="eventsTable">
+              <tr>
+                <td
+                  colspan="5"
+                  style="text-align: center; padding: 40px; color: #999"
+                >
+                  ⏳ Carregando eventos...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 30px">
+        <div class="card-header">
+          <span>Notificações e Preferências</span>
+        </div>
+        <div class="card-body">
+          <form
+            style="
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+              gap: 20px;
+            "
+          >
+            <div>
+              <label
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  font-weight: normal;
+                  cursor: pointer;
+                "
+              >
+                <input type="checkbox" checked />
+                <span>Alertar em nível crítico (e-mail)</span>
+              </label>
+              <label
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  font-weight: normal;
+                  cursor: pointer;
+                  margin-top: 8px;
+                "
+              >
+                <input type="checkbox" checked />
+                <span>Alertar em avisos de consumo</span>
+              </label>
+              <label
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  font-weight: normal;
+                  cursor: pointer;
+                  margin-top: 8px;
+                "
+              >
+                <input type="checkbox" checked />
+                <span>Notificações de manutenção</span>
+              </label>
+            </div>
+
+            <div>
+              <label>E-mail para Alertas</label>
+              <input
+                type="email"
+                placeholder="admin@aguada.com"
+                value="admin@aguada.com"
+              />
+            </div>
+
+            <div>
+              <label>Telefone (WhatsApp)</label>
+              <input
+                type="tel"
+                placeholder="(11) 99999-9999"
+                value="(11) 98765-4321"
+              />
+            </div>
+
+            <div style="grid-column: 1 / -1">
+              <button type="button" class="btn-success">
+                💾 Salvar Preferências
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="stats-footer">
+        <div class="stat">
+          <div class="stat-value" id="footerTotalEvents">-</div>
+          <div class="stat-label">Total de Eventos</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="footerActiveAlerts">-</div>
+          <div class="stat-label">Alertas Ativos</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="footerResolutionRate">-</div>
+          <div class="stat-label">Taxa de Resolução</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="footerAvgResolution">-</div>
+          <div class="stat-label">Tempo Médio de Resolução</div>
+        </div>
+      </div>
+    </div>
+
+    <script src="assets/layout.js"></script>
     <script src="assets/api-service.js"></script>
     <script src="assets/ui-utils.js"></script>
     <script src="assets/app.js"></script>
     <script>
-        let allAlerts = [];
-        let filteredAlerts = [];
-        let currentFilter = 'all';
+      let allAlerts = [];
+      let filteredAlerts = [];
+      let currentFilter = "all";
 
-        // Carregar alertas da API
-        async function loadAlerts() {
-            try {
-                if (!window.apiService) {
-                    console.warn('[Alerts] API Service não disponível');
-                    return;
-                }
+      // Carregar alertas da API
+      async function loadAlerts() {
+        try {
+          if (!window.apiService) {
+            console.warn("[Alerts] API Service não disponível");
+            return;
+          }
 
-                // Buscar alertas ativos
-                let activeAlerts = [];
-                try {
-                    const activeResponse = await window.apiService.getAlerts({ status: 'active', limit: 100 });
-                    activeAlerts = Array.isArray(activeResponse) ? activeResponse : (activeResponse?.data || []);
-                } catch (error) {
-                    console.warn('[Alerts] Erro ao buscar alertas ativos:', error);
-                }
-                
-                // Buscar resumo de alertas
-                let summary = null;
-                try {
-                    const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
-                    const summaryResponse = await fetch(`${baseURL}/alerts/summary`);
-                    if (summaryResponse.ok) {
-                        const summaryData = await summaryResponse.json();
-                        if (summaryData.success && summaryData.data) {
-                            summary = summaryData.data;
-                        }
-                    }
-                } catch (error) {
-                    console.warn('[Alerts] Erro ao buscar resumo:', error);
-                }
+          // Buscar alertas ativos
+          let activeAlerts = [];
+          try {
+            const activeResponse = await window.apiService.getAlerts({
+              status: "active",
+              limit: 100,
+            });
+            activeAlerts = Array.isArray(activeResponse)
+              ? activeResponse
+              : activeResponse?.data || [];
+          } catch (error) {
+            console.warn("[Alerts] Erro ao buscar alertas ativos:", error);
+          }
 
-                // Buscar histórico de alertas (últimos 30 dias)
-                let historyAlerts = [];
-                try {
-                    const historyResponse = await window.apiService.getAlerts({ limit: 200 });
-                    historyAlerts = Array.isArray(historyResponse) ? historyResponse : (historyResponse?.data || []);
-                } catch (error) {
-                    console.warn('[Alerts] Erro ao buscar histórico:', error);
-                }
+          // Buscar resumo de alertas
+          let summary = null;
+          try {
+            const baseURL =
+              window.apiService.baseURL || "http://localhost:3000/api";
+            const summaryResponse = await fetch(`${baseURL}/alerts/summary`);
+            if (summaryResponse.ok) {
+              const summaryData = await summaryResponse.json();
+              if (summaryData.success && summaryData.data) {
+                summary = summaryData.data;
+              }
+            }
+          } catch (error) {
+            console.warn("[Alerts] Erro ao buscar resumo:", error);
+          }
 
-                allAlerts = historyAlerts;
-                filteredAlerts = [...allAlerts];
+          // Buscar histórico de alertas (últimos 30 dias)
+          let historyAlerts = [];
+          try {
+            const historyResponse = await window.apiService.getAlerts({
+              limit: 200,
+            });
+            historyAlerts = Array.isArray(historyResponse)
+              ? historyResponse
+              : historyResponse?.data || [];
+          } catch (error) {
+            console.warn("[Alerts] Erro ao buscar histórico:", error);
+          }
 
-                // Renderizar alertas ativos
-                renderActiveAlerts(activeAlerts);
+          allAlerts = historyAlerts;
+          filteredAlerts = [...allAlerts];
 
-                // Renderizar resumo
-                if (summary) {
-                    renderSummary(summary);
-                }
+          // Renderizar alertas ativos
+          renderActiveAlerts(activeAlerts);
 
-                // Renderizar tabela de eventos
-                renderEventsTable();
+          // Renderizar resumo
+          if (summary) {
+            renderSummary(summary);
+          }
 
-                // Atualizar contadores
-                updateCounters(activeAlerts.length, summary);
-            } catch (error) {
-                console.error('[Alerts] Erro ao carregar alertas:', error);
-                const container = document.getElementById('activeAlertsContainer');
-                if (container) {
-                    container.innerHTML = 
-                        '<div class="alert alert-warning">Erro ao carregar alertas. Verifique a conexão com o servidor.</div>';
-                }
-                
-                // Mostrar erro na tabela também
-                const tbody = document.getElementById('eventsTable');
-                if (tbody) {
-                    tbody.innerHTML = `
+          // Renderizar tabela de eventos
+          renderEventsTable();
+
+          // Atualizar contadores
+          updateCounters(activeAlerts.length, summary);
+        } catch (error) {
+          console.error("[Alerts] Erro ao carregar alertas:", error);
+          const container = document.getElementById("activeAlertsContainer");
+          if (container) {
+            container.innerHTML =
+              '<div class="alert alert-warning">Erro ao carregar alertas. Verifique a conexão com o servidor.</div>';
+          }
+
+          // Mostrar erro na tabela também
+          const tbody = document.getElementById("eventsTable");
+          if (tbody) {
+            tbody.innerHTML = `
                         <tr>
                             <td colspan="5" style="text-align: center; padding: 40px; color: #ef4444;">
-                                ❌ Erro ao carregar eventos: ${error.message || 'Erro desconhecido'}
+                                ❌ Erro ao carregar eventos: ${
+                                  error.message || "Erro desconhecido"
+                                }
                             </td>
                         </tr>
                     `;
-                }
-            }
+          }
+        }
+      }
+
+      // Renderizar alertas ativos
+      function renderActiveAlerts(alerts) {
+        const container = document.getElementById("activeAlertsContainer");
+        if (!container) return;
+
+        if (alerts.length === 0) {
+          container.innerHTML =
+            '<div class="alert alert-info">✅ Nenhum alerta ativo no momento</div>';
+          return;
         }
 
-        // Renderizar alertas ativos
-        function renderActiveAlerts(alerts) {
-            const container = document.getElementById('activeAlertsContainer');
-            if (!container) return;
+        container.innerHTML = alerts
+          .map((alert) => {
+            const levelClass =
+              alert.nivel === "critical" || alert.nivel === "error"
+                ? "alert-danger"
+                : alert.nivel === "warning"
+                ? "alert-warning"
+                : "alert-info";
+            const levelIcon =
+              alert.nivel === "critical" || alert.nivel === "error"
+                ? "🔴"
+                : alert.nivel === "warning"
+                ? "🟡"
+                : "ℹ️";
+            const levelText =
+              alert.nivel === "critical" || alert.nivel === "error"
+                ? "CRÍTICO"
+                : alert.nivel === "warning"
+                ? "AVISO"
+                : "INFO";
 
-            if (alerts.length === 0) {
-                container.innerHTML = '<div class="alert alert-info">✅ Nenhum alerta ativo no momento</div>';
-                return;
-            }
+            const timestamp = alert.datetime
+              ? new Date(alert.datetime).toLocaleString("pt-BR")
+              : "-";
+            const duration = alert.datetime
+              ? calculateDuration(alert.datetime)
+              : "";
 
-            container.innerHTML = alerts.map(alert => {
-                const levelClass = alert.nivel === 'critical' || alert.nivel === 'error' ? 'alert-danger' :
-                                  alert.nivel === 'warning' ? 'alert-warning' : 'alert-info';
-                const levelIcon = alert.nivel === 'critical' || alert.nivel === 'error' ? '🔴' :
-                                 alert.nivel === 'warning' ? '🟡' : 'ℹ️';
-                const levelText = alert.nivel === 'critical' || alert.nivel === 'error' ? 'CRÍTICO' :
-                                 alert.nivel === 'warning' ? 'AVISO' : 'INFO';
-
-                const timestamp = alert.datetime ? new Date(alert.datetime).toLocaleString('pt-BR') : '-';
-                const duration = alert.datetime ? calculateDuration(alert.datetime) : '';
-
-                return `
+            return `
                     <div class="alert ${levelClass}">
-                        <strong>${levelIcon} ${levelText}:</strong> ${alert.mensagem || alert.tipo || 'Alerta'}
+                        <strong>${levelIcon} ${levelText}:</strong> ${
+              alert.mensagem || alert.tipo || "Alerta"
+            }
                         <div style="font-size: 11px; margin-top: 5px; color: #666;">
-                            Sensor: ${alert.elemento_id || alert.sensor_id || 'N/A'} | 
-                            Detectado em: ${timestamp}${duration ? ' | Duração: ' + duration : ''}
+                            Sensor: ${
+                              alert.elemento_id || alert.sensor_id || "N/A"
+                            } | 
+                            Detectado em: ${timestamp}${
+              duration ? " | Duração: " + duration : ""
+            }
                         </div>
                     </div>
                 `;
-            }).join('');
+          })
+          .join("");
+      }
+
+      // Renderizar resumo
+      function renderSummary(summary) {
+        const critical = summary.by_level?.critical ||
+          summary.by_level?.error || { active: 0, count: 0 };
+        const warning = summary.by_level?.warning || { active: 0, count: 0 };
+        const info = summary.by_level?.info || { active: 0, count: 0 };
+
+        // Atualizar estatísticas no resumo usando IDs específicos
+        const summaryCritical = document.getElementById("summaryCritical");
+        const summaryWarning = document.getElementById("summaryWarning");
+        const summaryInfo = document.getElementById("summaryInfo");
+        const summaryResolved = document.getElementById("summaryResolved");
+
+        if (summaryCritical) {
+          summaryCritical.textContent = critical.count || 0;
+        }
+        if (summaryWarning) {
+          summaryWarning.textContent = warning.count || 0;
+        }
+        if (summaryInfo) {
+          summaryInfo.textContent = info.count || 0;
+        }
+        if (summaryResolved) {
+          summaryResolved.textContent = summary.resolved || 0;
+        }
+      }
+
+      // Renderizar tabela de eventos
+      function renderEventsTable() {
+        const tbody = document.getElementById("eventsTable");
+        if (!tbody) return;
+
+        if (filteredAlerts.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="text-align: center; color: #999;">Nenhum evento encontrado</td></tr>';
+          return;
         }
 
-        // Renderizar resumo
-        function renderSummary(summary) {
-            const critical = summary.by_level?.critical || summary.by_level?.error || { active: 0, count: 0 };
-            const warning = summary.by_level?.warning || { active: 0, count: 0 };
-            const info = summary.by_level?.info || { active: 0, count: 0 };
+        tbody.innerHTML = filteredAlerts
+          .slice(0, 50)
+          .map((alert) => {
+            const levelBadge =
+              alert.nivel === "critical" || alert.nivel === "error"
+                ? '<span style="background: #ef4444; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">CRÍTICO</span>'
+                : alert.nivel === "warning"
+                ? '<span style="background: #f59e0b; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">AVISO</span>'
+                : alert.resolvido
+                ? '<span style="background: #10b981; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">RESOLVIDO</span>'
+                : '<span style="background: #06b6d4; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">INFO</span>';
 
-            // Atualizar estatísticas no resumo usando IDs específicos
-            const summaryCritical = document.getElementById('summaryCritical');
-            const summaryWarning = document.getElementById('summaryWarning');
-            const summaryInfo = document.getElementById('summaryInfo');
-            const summaryResolved = document.getElementById('summaryResolved');
-            
-            if (summaryCritical) {
-                summaryCritical.textContent = critical.count || 0;
-            }
-            if (summaryWarning) {
-                summaryWarning.textContent = warning.count || 0;
-            }
-            if (summaryInfo) {
-                summaryInfo.textContent = info.count || 0;
-            }
-            if (summaryResolved) {
-                summaryResolved.textContent = summary.resolved || 0;
-            }
-        }
+            const timestamp = alert.datetime
+              ? typeof formatDateTime === "function"
+                ? formatDateTime(alert.datetime)
+                : new Date(alert.datetime).toLocaleString("pt-BR")
+              : "-";
 
-        // Renderizar tabela de eventos
-        function renderEventsTable() {
-            const tbody = document.getElementById('eventsTable');
-            if (!tbody) return;
-
-            if (filteredAlerts.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">Nenhum evento encontrado</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = filteredAlerts.slice(0, 50).map(alert => {
-                const levelBadge = alert.nivel === 'critical' || alert.nivel === 'error' 
-                    ? '<span style="background: #ef4444; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">CRÍTICO</span>'
-                    : alert.nivel === 'warning'
-                    ? '<span style="background: #f59e0b; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">AVISO</span>'
-                    : alert.resolvido
-                    ? '<span style="background: #10b981; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">RESOLVIDO</span>'
-                    : '<span style="background: #06b6d4; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;">INFO</span>';
-
-                const timestamp = alert.datetime ? (typeof formatDateTime === 'function' 
-                    ? formatDateTime(alert.datetime) 
-                    : new Date(alert.datetime).toLocaleString('pt-BR')) : '-';
-
-                return `
+            return `
                     <tr>
                         <td>${timestamp}</td>
                         <td>${levelBadge}</td>
-                        <td><strong>${alert.elemento_id || alert.sensor_id || 'N/A'}</strong></td>
-                        <td>${alert.mensagem || alert.tipo || 'Alerta'}</td>
+                        <td><strong>${
+                          alert.elemento_id || alert.sensor_id || "N/A"
+                        }</strong></td>
+                        <td>${alert.mensagem || alert.tipo || "Alerta"}</td>
                         <td>
-                            ${!alert.resolvido ? 
-                                `<button onclick="resolveAlert(${alert.alerta_id})" style="background: #10b981; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">Resolver</button>` :
-                                `<button style="background: #6b7280; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;" disabled>Resolvido</button>`
+                            ${
+                              !alert.resolvido
+                                ? `<button onclick="resolveAlert(${alert.alerta_id})" style="background: #10b981; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">Resolver</button>`
+                                : `<button style="background: #6b7280; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;" disabled>Resolvido</button>`
                             }
                         </td>
                     </tr>
                 `;
-            }).join('');
+          })
+          .join("");
+      }
+
+      // Filtrar eventos
+      function filterEvents(level) {
+        currentFilter = level;
+
+        // Atualizar botões
+        document.querySelectorAll(".btn-primary").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        if (level === "all") {
+          filteredAlerts = [...allAlerts];
+        } else if (level === "critical") {
+          filteredAlerts = allAlerts.filter(
+            (a) => a.nivel === "critical" || a.nivel === "error"
+          );
+        } else if (level === "warning") {
+          filteredAlerts = allAlerts.filter((a) => a.nivel === "warning");
+        } else if (level === "info") {
+          filteredAlerts = allAlerts.filter((a) => a.nivel === "info");
         }
 
-        // Filtrar eventos
-        function filterEvents(level) {
-            currentFilter = level;
-            
-            // Atualizar botões
-            document.querySelectorAll('.btn-primary').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
+        renderEventsTable();
+      }
 
-            if (level === 'all') {
-                filteredAlerts = [...allAlerts];
-            } else if (level === 'critical') {
-                filteredAlerts = allAlerts.filter(a => a.nivel === 'critical' || a.nivel === 'error');
-            } else if (level === 'warning') {
-                filteredAlerts = allAlerts.filter(a => a.nivel === 'warning');
-            } else if (level === 'info') {
-                filteredAlerts = allAlerts.filter(a => a.nivel === 'info');
-            }
+      // Resolver alerta
+      async function resolveAlert(alertId) {
+        try {
+          if (!window.apiService) {
+            alert("API Service não disponível");
+            return;
+          }
 
-            renderEventsTable();
-        }
+          const baseURL =
+            window.apiService.baseURL || "http://localhost:3000/api";
+          const response = await fetch(`${baseURL}/alerts/${alertId}/resolve`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              observacao: "Resolvido manualmente pelo usuário",
+            }),
+          });
 
-        // Resolver alerta
-        async function resolveAlert(alertId) {
-            try {
-                if (!window.apiService) {
-                    alert('API Service não disponível');
-                    return;
-                }
-
-                const baseURL = window.apiService.baseURL || 'http://localhost:3000/api';
-                const response = await fetch(`${baseURL}/alerts/${alertId}/resolve`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ observacao: 'Resolvido manualmente pelo usuário' })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    // Recarregar alertas
-                    await loadAlerts();
-                } else {
-                    alert('Erro ao resolver alerta: ' + (result.error || 'Erro desconhecido'));
-                }
-            } catch (error) {
-                console.error('[Alerts] Erro ao resolver alerta:', error);
-                alert('Erro ao resolver alerta');
-            }
-        }
-
-        // Calcular duração
-        function calculateDuration(timestamp) {
-            const now = new Date();
-            const alertTime = new Date(timestamp);
-            const diffMs = now - alertTime;
-            const diffMins = Math.floor(diffMs / 60000);
-            const diffHours = Math.floor(diffMins / 60);
-            const diffDays = Math.floor(diffHours / 24);
-
-            if (diffDays > 0) return `${diffDays} dia${diffDays > 1 ? 's' : ''}`;
-            if (diffHours > 0) return `${diffHours} hora${diffHours > 1 ? 's' : ''}`;
-            if (diffMins > 0) return `${diffMins} minuto${diffMins > 1 ? 's' : ''}`;
-            return 'menos de 1 minuto';
-        }
-
-        // Atualizar contadores
-        function updateCounters(activeCount, summary) {
-            const activeAlertsEl = document.getElementById('activeAlerts');
-            if (activeAlertsEl) {
-                activeAlertsEl.textContent = activeCount || 0;
-            }
-            
-            const footerTotalEvents = document.getElementById('footerTotalEvents');
-            const footerActiveAlerts = document.getElementById('footerActiveAlerts');
-            const footerResolutionRate = document.getElementById('footerResolutionRate');
-            const footerAvgResolution = document.getElementById('footerAvgResolution');
-            
-            if (summary) {
-                if (footerTotalEvents) {
-                    footerTotalEvents.textContent = summary.total || 0;
-                }
-                if (footerActiveAlerts) {
-                    footerActiveAlerts.textContent = activeCount || 0;
-                }
-                if (footerResolutionRate) {
-                    const resolutionRate = summary.total > 0 
-                        ? Math.round((summary.resolved / summary.total) * 100) 
-                        : 0;
-                    footerResolutionRate.textContent = resolutionRate + '%';
-                }
-                // Tempo médio de resolução pode ser calculado se houver dados
-                if (footerAvgResolution) {
-                    footerAvgResolution.textContent = summary.avg_resolution_time || '-';
-                }
-            } else {
-                // Se não houver summary, usar dados de allAlerts
-                if (footerTotalEvents) {
-                    footerTotalEvents.textContent = allAlerts.length || 0;
-                }
-                if (footerActiveAlerts) {
-                    footerActiveAlerts.textContent = activeCount || 0;
-                }
-                if (footerResolutionRate) {
-                    const resolved = allAlerts.filter(a => a.resolvido).length;
-                    const total = allAlerts.length;
-                    const rate = total > 0 ? Math.round((resolved / total) * 100) : 0;
-                    footerResolutionRate.textContent = rate + '%';
-                }
-            }
-        }
-
-        // Inicializar
-        async function init() {
-            // Aguardar API Service
-            let attempts = 0;
-            while (!window.apiService && attempts < 50) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                attempts++;
-            }
-            
-            if (!window.apiService) {
-                console.error('[Alerts] API Service não carregou após 5 segundos');
-                const container = document.getElementById('activeAlertsContainer');
-                if (container) {
-                    container.innerHTML = '<div class="alert alert-warning">API Service não disponível. Recarregue a página.</div>';
-                }
-                return;
-            }
-            
+          const result = await response.json();
+          if (result.success) {
+            // Recarregar alertas
             await loadAlerts();
-            
-            // Atualizar a cada 30 segundos
-            setInterval(loadAlerts, 30000);
+          } else {
+            alert(
+              "Erro ao resolver alerta: " +
+                (result.error || "Erro desconhecido")
+            );
+          }
+        } catch (error) {
+          console.error("[Alerts] Erro ao resolver alerta:", error);
+          alert("Erro ao resolver alerta");
+        }
+      }
+
+      // Calcular duração
+      function calculateDuration(timestamp) {
+        const now = new Date();
+        const alertTime = new Date(timestamp);
+        const diffMs = now - alertTime;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffDays > 0) return `${diffDays} dia${diffDays > 1 ? "s" : ""}`;
+        if (diffHours > 0)
+          return `${diffHours} hora${diffHours > 1 ? "s" : ""}`;
+        if (diffMins > 0) return `${diffMins} minuto${diffMins > 1 ? "s" : ""}`;
+        return "menos de 1 minuto";
+      }
+
+      // Atualizar contadores
+      function updateCounters(activeCount, summary) {
+        const activeAlertsEl = document.getElementById("activeAlerts");
+        if (activeAlertsEl) {
+          activeAlertsEl.textContent = activeCount || 0;
         }
 
-        // Aguardar DOM e API Service
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
+        const footerTotalEvents = document.getElementById("footerTotalEvents");
+        const footerActiveAlerts =
+          document.getElementById("footerActiveAlerts");
+        const footerResolutionRate = document.getElementById(
+          "footerResolutionRate"
+        );
+        const footerAvgResolution = document.getElementById(
+          "footerAvgResolution"
+        );
+
+        if (summary) {
+          if (footerTotalEvents) {
+            footerTotalEvents.textContent = summary.total || 0;
+          }
+          if (footerActiveAlerts) {
+            footerActiveAlerts.textContent = activeCount || 0;
+          }
+          if (footerResolutionRate) {
+            const resolutionRate =
+              summary.total > 0
+                ? Math.round((summary.resolved / summary.total) * 100)
+                : 0;
+            footerResolutionRate.textContent = resolutionRate + "%";
+          }
+          // Tempo médio de resolução pode ser calculado se houver dados
+          if (footerAvgResolution) {
+            footerAvgResolution.textContent =
+              summary.avg_resolution_time || "-";
+          }
         } else {
-            init();
+          // Se não houver summary, usar dados de allAlerts
+          if (footerTotalEvents) {
+            footerTotalEvents.textContent = allAlerts.length || 0;
+          }
+          if (footerActiveAlerts) {
+            footerActiveAlerts.textContent = activeCount || 0;
+          }
+          if (footerResolutionRate) {
+            const resolved = allAlerts.filter((a) => a.resolvido).length;
+            const total = allAlerts.length;
+            const rate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+            footerResolutionRate.textContent = rate + "%";
+          }
         }
+      }
+
+      // Inicializar
+      async function init() {
+        // Aguardar API Service
+        let attempts = 0;
+        while (!window.apiService && attempts < 50) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (!window.apiService) {
+          console.error("[Alerts] API Service não carregou após 5 segundos");
+          const container = document.getElementById("activeAlertsContainer");
+          if (container) {
+            container.innerHTML =
+              '<div class="alert alert-warning">API Service não disponível. Recarregue a página.</div>';
+          }
+          return;
+        }
+
+        await loadAlerts();
+
+        // Atualizar a cada 30 segundos
+        setInterval(loadAlerts, 30000);
+      }
+
+      // Aguardar DOM e API Service
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+      } else {
+        init();
+      }
     </script>
-</body>
+  </body>
 </html>

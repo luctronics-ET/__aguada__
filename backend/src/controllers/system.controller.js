@@ -1,9 +1,9 @@
-import pool from '../config/database.js';
-import logger from '../config/logger.js';
-import { getClientsCount } from '../websocket/wsHandler.js';
-import metricsService from '../services/metrics.service.js';
-import alertService from '../services/alert.service.js';
-import os from 'os';
+import pool from "../config/database.js";
+import logger from "../config/logger.js";
+import { getClientsCount } from "../websocket/wsHandler.js";
+import metricsService from "../services/metrics.service.js";
+import alertService from "../services/alert.service.js";
+import os from "os";
 
 /**
  * GET /api/system/health
@@ -12,15 +12,15 @@ import os from 'os';
 export async function getSystemHealth(req, res) {
   try {
     // Check database
-    let dbStatus = 'down';
+    let dbStatus = "down";
     let dbLatency = null;
     try {
       const dbStart = Date.now();
-      await pool.query('SELECT 1');
+      await pool.query("SELECT 1");
       dbLatency = Date.now() - dbStart;
-      dbStatus = dbLatency < 100 ? 'healthy' : 'degraded';
+      dbStatus = dbLatency < 100 ? "healthy" : "degraded";
     } catch (error) {
-      logger.error('Database health check failed:', error);
+      logger.error("Database health check failed:", error);
     }
 
     // Get database stats
@@ -28,8 +28,8 @@ export async function getSystemHealth(req, res) {
       SELECT 
         (SELECT COUNT(*) FROM aguada.leituras_raw) as total_readings,
         (SELECT COUNT(*) FROM aguada.sensores) as total_sensors,
-        (SELECT COUNT(*) FROM aguada.alertas WHERE resolvido = FALSE) as active_alerts,
-        (SELECT COUNT(*) FROM aguada.eventos WHERE datetime > NOW() - INTERVAL '24 hours') as recent_events
+        (SELECT COUNT(*) FROM aguada.alertas WHERE status = 'ativo') as active_alerts,
+        (SELECT COUNT(*) FROM aguada.eventos WHERE datetime_inicio > NOW() - INTERVAL '24 hours') as recent_events
     `);
 
     // System info
@@ -42,12 +42,12 @@ export async function getSystemHealth(req, res) {
       freeMemory: Math.round(os.freemem() / 1024 / 1024 / 1024), // GB
       uptime: Math.round(os.uptime()),
       nodeVersion: process.version,
-      processUptime: Math.round(process.uptime())
+      processUptime: Math.round(process.uptime()),
     };
 
     // WebSocket stats
     const wsStats = {
-      connected_clients: getClientsCount()
+      connected_clients: getClientsCount(),
     };
 
     // Serial Bridge stats (se disponível)
@@ -55,45 +55,45 @@ export async function getSystemHealth(req, res) {
     if (global.serialBridge) {
       const stats = global.serialBridge.getStats();
       serialBridgeStats = {
-        status: stats.isConnected ? 'connected' : 'disconnected',
+        status: stats.isConnected ? "connected" : "disconnected",
         port: stats.portPath,
         packets_received: stats.packetsReceived,
         packets_sent: stats.packetsSent,
         errors: stats.errors,
         uptime_sec: stats.uptime,
-        last_packet_time: stats.lastPacketTime
+        last_packet_time: stats.lastPacketTime,
       };
     }
 
     res.status(200).json({
       success: true,
-      status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
+      status: dbStatus === "healthy" ? "healthy" : "degraded",
       timestamp: new Date().toISOString(),
       components: {
         database: {
           status: dbStatus,
-          latency_ms: dbLatency
+          latency_ms: dbLatency,
         },
         websocket: {
-          status: 'healthy',
-          clients: wsStats.connected_clients
+          status: "healthy",
+          clients: wsStats.connected_clients,
         },
         serial_bridge: serialBridgeStats || {
-          status: 'not_available'
+          status: "not_available",
         },
         api: {
-          status: 'healthy'
-        }
+          status: "healthy",
+        },
       },
       stats: dbStats.rows[0],
-      system: systemInfo
+      system: systemInfo,
     });
   } catch (error) {
-    logger.error('Error getting system health:', error);
+    logger.error("Error getting system health:", error);
     res.status(500).json({
       success: false,
-      status: 'error',
-      error: 'Erro ao obter status do sistema'
+      status: "error",
+      error: "Erro ao obter status do sistema",
     });
   }
 }
@@ -104,27 +104,24 @@ export async function getSystemHealth(req, res) {
  */
 export async function getSystemLogs(req, res) {
   try {
-    const { 
-      level = 'info',
-      limit = 100,
-      offset = 0
-    } = req.query;
+    const { level = "info", limit = 100, offset = 0 } = req.query;
 
     // In production, read from actual log files or logging service
     // For now, return mock data
     const logs = [];
-    
+
     res.status(200).json({
       success: true,
       count: logs.length,
       data: logs,
-      message: 'Log retrieval from files not implemented yet. Use external logging service.'
+      message:
+        "Log retrieval from files not implemented yet. Use external logging service.",
     });
   } catch (error) {
-    logger.error('Error getting system logs:', error);
+    logger.error("Error getting system logs:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao obter logs do sistema'
+      error: "Erro ao obter logs do sistema",
     });
   }
 }
@@ -145,7 +142,7 @@ export async function getSystemMetrics(req, res) {
         pid: process.pid,
         uptime: Math.round(process.uptime()),
         memory: process.memoryUsage(),
-        cpu: process.cpuUsage()
+        cpu: process.cpuUsage(),
       },
       system: {
         hostname: os.hostname(),
@@ -155,22 +152,22 @@ export async function getSystemMetrics(req, res) {
         loadavg: os.loadavg(),
         totalMemory: os.totalmem(),
         freeMemory: os.freemem(),
-        uptime: os.uptime()
-      }
+        uptime: os.uptime(),
+      },
     };
 
     res.status(200).json({
       success: true,
       data: {
         ...systemMetrics,
-        application: appMetrics
-      }
+        application: appMetrics,
+      },
     });
   } catch (error) {
-    logger.error('Error getting system metrics:', error);
+    logger.error("Error getting system metrics:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao obter métricas do sistema'
+      error: "Erro ao obter métricas do sistema",
     });
   }
 }
@@ -183,7 +180,7 @@ export async function getSystemAlerts(req, res) {
   try {
     const { history = false, limit = 50 } = req.query;
 
-    if (history === 'true') {
+    if (history === "true") {
       // Retornar histórico de alertas
       const alertHistory = alertService.getHistory(parseInt(limit));
       const stats = alertService.getStats();
@@ -192,7 +189,7 @@ export async function getSystemAlerts(req, res) {
         success: true,
         history: alertHistory,
         stats,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } else {
       // Retornar alertas atuais
@@ -202,14 +199,14 @@ export async function getSystemAlerts(req, res) {
         success: true,
         count: alerts.length,
         alerts,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
   } catch (error) {
-    logger.error('Error getting system alerts:', error);
+    logger.error("Error getting system alerts:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao obter alertas do sistema'
+      error: "Erro ao obter alertas do sistema",
     });
   }
 }
@@ -220,23 +217,23 @@ export async function getSystemAlerts(req, res) {
  */
 export async function restartSystem(req, res) {
   try {
-    logger.warn('System restart requested');
-    
+    logger.warn("System restart requested");
+
     res.status(200).json({
       success: true,
-      message: 'Sistema será reiniciado em 5 segundos'
+      message: "Sistema será reiniciado em 5 segundos",
     });
 
     // Give time for response to be sent
     setTimeout(() => {
-      logger.info('Restarting system...');
+      logger.info("Restarting system...");
       process.exit(0); // Process manager (PM2, systemd) should restart
     }, 5000);
   } catch (error) {
-    logger.error('Error restarting system:', error);
+    logger.error("Error restarting system:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao reiniciar sistema'
+      error: "Erro ao reiniciar sistema",
     });
   }
 }

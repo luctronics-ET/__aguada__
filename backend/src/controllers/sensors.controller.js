@@ -1,5 +1,5 @@
-import { pool } from '../config/database.js';
-import logger from '../config/logger.js';
+import { pool } from "../config/database.js";
+import logger from "../config/logger.js";
 
 /**
  * GET /api/sensors
@@ -11,11 +11,14 @@ export async function getAllSensors(req, res) {
       SELECT 
         s.sensor_id,
         s.elemento_id,
-        s.tipo_sensor,
-        s.localizacao,
+        s.node_mac,
+        s.tipo,
+        s.modelo,
+        s.variavel,
+        s.unidade,
         s.status,
-        s.data_instalacao,
         s.ultima_calibracao,
+        s.criado_em,
         e.nome as elemento_nome,
         e.tipo as elemento_tipo
       FROM aguada.sensores s
@@ -26,13 +29,13 @@ export async function getAllSensors(req, res) {
     res.status(200).json({
       success: true,
       count: result.rows.length,
-      data: result.rows
+      data: result.rows,
     });
   } catch (error) {
-    logger.error('Error fetching sensors:', error);
+    logger.error("Error fetching sensors:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao buscar sensores'
+      error: "Erro ao buscar sensores",
     });
   }
 }
@@ -45,7 +48,8 @@ export async function getSensorById(req, res) {
   try {
     const { sensor_id } = req.params;
 
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT 
         s.*,
         e.nome as elemento_nome,
@@ -54,24 +58,26 @@ export async function getSensorById(req, res) {
       FROM aguada.sensores s
       LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
       WHERE s.sensor_id = $1
-    `, [sensor_id]);
+    `,
+      [sensor_id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Sensor não encontrado'
+        error: "Sensor não encontrado",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: result.rows[0]
+      data: result.rows[0],
     });
   } catch (error) {
-    logger.error('Error fetching sensor:', error);
+    logger.error("Error fetching sensor:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao buscar sensor'
+      error: "Erro ao buscar sensor",
     });
   }
 }
@@ -85,8 +91,20 @@ export async function updateSensor(req, res) {
     const { sensor_id } = req.params;
     const updates = req.body;
 
-    // Build dynamic update query
-    const allowedFields = ['tipo_sensor', 'localizacao', 'status', 'parametros', 'observacoes'];
+    // Build dynamic update query - campos do schema atual
+    const allowedFields = [
+      "tipo",
+      "modelo",
+      "variavel",
+      "unidade",
+      "status",
+      "gpio_config",
+      "precisao",
+      "range_min",
+      "range_max",
+      "frequencia_leitura_sec",
+      "ajuste_offset",
+    ];
     const setClause = [];
     const values = [];
     let paramCount = 1;
@@ -102,15 +120,14 @@ export async function updateSensor(req, res) {
     if (setClause.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Nenhum campo válido para atualizar'
+        error: "Nenhum campo válido para atualizar",
       });
     }
 
     values.push(sensor_id);
     const query = `
       UPDATE aguada.sensores 
-      SET ${setClause.join(', ')}, 
-          data_atualizacao = NOW()
+      SET ${setClause.join(", ")}
       WHERE sensor_id = $${paramCount}
       RETURNING *
     `;
@@ -120,7 +137,7 @@ export async function updateSensor(req, res) {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Sensor não encontrado'
+        error: "Sensor não encontrado",
       });
     }
 
@@ -128,14 +145,14 @@ export async function updateSensor(req, res) {
 
     res.status(200).json({
       success: true,
-      message: 'Sensor atualizado com sucesso',
-      data: result.rows[0]
+      message: "Sensor atualizado com sucesso",
+      data: result.rows[0],
     });
   } catch (error) {
-    logger.error('Error updating sensor:', error);
+    logger.error("Error updating sensor:", error);
     res.status(500).json({
       success: false,
-      error: 'Erro ao atualizar sensor'
+      error: "Erro ao atualizar sensor",
     });
   }
 }
@@ -167,27 +184,28 @@ export async function getSensorsStatus(req, res) {
 
     const summary = {
       total: result.rows.length,
-      online: result.rows.filter(r => r.estado_conexao === 'online').length,
-      warning: result.rows.filter(r => r.estado_conexao === 'warning').length,
-      offline: result.rows.filter(r => r.estado_conexao === 'offline').length
+      online: result.rows.filter((r) => r.estado_conexao === "online").length,
+      warning: result.rows.filter((r) => r.estado_conexao === "warning").length,
+      offline: result.rows.filter((r) => r.estado_conexao === "offline").length,
     };
 
     res.status(200).json({
       success: true,
       summary,
-      data: result.rows
+      data: result.rows,
     });
   } catch (error) {
-    logger.error('Error fetching sensors status:', error);
-    logger.error('Error details:', {
+    logger.error("Error fetching sensors status:", error);
+    logger.error("Error details:", {
       message: error.message,
       stack: error.stack,
-      code: error.code
+      code: error.code,
     });
     res.status(500).json({
       success: false,
-      error: 'Erro ao buscar status dos sensores',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: "Erro ao buscar status dos sensores",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 }
@@ -196,5 +214,5 @@ export default {
   getAllSensors,
   getSensorById,
   updateSensor,
-  getSensorsStatus
+  getSensorsStatus,
 };
