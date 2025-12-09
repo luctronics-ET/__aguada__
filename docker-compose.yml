@@ -74,6 +74,7 @@ services:
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      SERIAL_PORT: ${SERIAL_PORT:-/dev/ttyACM0}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     depends_on:
@@ -83,6 +84,8 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/logs:/app/logs
+    devices:
+      - "${SERIAL_PORT:-/dev/ttyACM0}:${SERIAL_PORT:-/dev/ttyACM0}"
     networks:
       - aguada-net
     restart: unless-stopped

@@ -25,8 +25,8 @@
 // ============================================================================
 // CONFIGURAÇÃO DO GATEWAY
 // ============================================================================
-// MAC do ESP32-C3 gateway (80:F1:B2:50:2E:C4)
-static const uint8_t GATEWAY_MAC[6] = {0x80, 0xf1, 0xb2, 0x50, 0x2e, 0xc4};
+// MAC do ESP32 gateway (80:F3:DA:62:A7:84)
+static const uint8_t GATEWAY_MAC[6] = {0x80, 0xF3, 0xDA, 0x62, 0xA7, 0x84};
 
 // Canal ESP-NOW (deve corresponder ao canal WiFi do gateway)
 #define ESPNOW_CHANNEL      11
@@ -107,7 +107,7 @@ static const uint8_t GATEWAY_MAC[6] = {0x80, 0xf1, 0xb2, 0x50, 0x2e, 0xc4};
 #define READ_INTERVAL_MS    2000    // Ler sensor a cada 2 segundos
 
 // Heartbeat (envio forçado mesmo sem mudança)
-#define HEARTBEAT_MS        120000  // Forçar envio a cada 2 minutos
+#define HEARTBEAT_MS        30000   // Forçar envio a cada 30 segundos
 
 // ============================================================================
 // COMPRESSÃO DE DADOS (DEADBAND)
