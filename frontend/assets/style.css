@@ -3,7 +3,7 @@
 :root {
   --primary-blue: #80abfc;
   --primary-light: #eff3fa;
-  --accent-purple: #555d81;
+  --accent-purple: #556d81;
   --accent-pink: #514ba2;
   --success-green: #74bda4;
   --warning-orange: #ebc481;
@@ -742,4 +742,129 @@ body.cache-mode #offlineBanner {
 body.offline,
 body.cache-mode {
   padding-top: 48px;
+}
+
+/* ========================================
+   SENSOR VALUES - Estados Online/Offline
+   ======================================== */
+
+/* Valor de sensor base */
+.sensor-value {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: inherit;
+  transition: all 0.3s ease;
+}
+
+/* Valor online - normal */
+.sensor-value-online {
+  color: inherit;
+  opacity: 1;
+}
+
+/* Valor offline - cinza transparente */
+.sensor-value-offline {
+  color: #6b7280 !important;
+  opacity: 0.6;
+  position: relative;
+}
+
+.sensor-value-offline::before {
+  content: "⏸";
+  font-size: 0.7em;
+  margin-right: 4px;
+  opacity: 0.7;
+}
+
+/* Timestamp do valor offline */
+.sensor-value-timestamp {
+  display: block;
+  font-size: 9px;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Valor não disponível */
+.sensor-value-na {
+  color: #9ca3af;
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* Card offline - aplicar estilo ao card inteiro */
+.reservoir-card.sensor-offline {
+  opacity: 0.7;
+  background: #f9fafb;
+}
+
+.reservoir-card.sensor-offline .card-header {
+  filter: grayscale(40%);
+  opacity: 0.8;
+}
+
+.reservoir-card.sensor-offline .volume-percent {
+  color: #6b7280 !important;
+}
+
+.reservoir-card.sensor-offline .volume-gauge-fill {
+  background: #9ca3af !important;
+  opacity: 0.6;
+}
+
+/* Data cells offline */
+.reservoir-card.sensor-offline .data-cell-value {
+  color: #6b7280;
+  opacity: 0.7;
+}
+
+/* Indicador de última leitura no card offline */
+.offline-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(107, 114, 128, 0.1);
+  border-radius: 6px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.offline-indicator::before {
+  content: "⏱️";
+}
+
+/* Volume display com estado offline */
+.volume-display.offline .volume-percent,
+.volume-display.offline .volume-m3 {
+  color: #6b7280 !important;
+  opacity: 0.7;
+}
+
+/* Diagrama - reservatório offline */
+.reservoir-visual.sensor-offline {
+  opacity: 0.6;
+  filter: grayscale(30%);
+}
+
+.reservoir-visual.sensor-offline .reservoir-level-visual {
+  background: linear-gradient(to top, #9ca3af, #9ca3af88) !important;
+}
+
+/* Animação de pulse para valores atualizando */
+@keyframes value-update {
+  0% {
+    background-color: rgba(16, 185, 129, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.sensor-value-updated {
+  animation: value-update 1s ease-out;
+  border-radius: 4px;
+  padding: 2px 4px;
 }

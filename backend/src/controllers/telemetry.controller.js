@@ -1,13 +1,19 @@
-import { validateTelemetry, validateIndividualTelemetry, validateManualReading, validateCalibration } from '../schemas/telemetry.schema.js';
-import sensorService from '../services/sensor.service.js';
-import readingService from '../services/reading.service.js';
-import compressionService from '../services/compression.service.js';
-import cacheService from '../services/cache.service.js';
-import queueService from '../services/queue.service.js';
-import duplicateService from '../services/duplicate.service.js';
-import metricsService from '../services/metrics.service.js';
-import logger from '../config/logger.js';
-import { broadcastReading } from '../websocket/wsHandler.js';
+import {
+  validateTelemetry,
+  validateIndividualTelemetry,
+  validateManualReading,
+  validateCalibration,
+} from "../schemas/telemetry.schema.js";
+import sensorService from "../services/sensor.service.js";
+import readingService from "../services/reading.service.js";
+import compressionService from "../services/compression.service.js";
+import cacheService from "../services/cache.service.js";
+import queueService from "../services/queue.service.js";
+import duplicateService from "../services/duplicate.service.js";
+import metricsService from "../services/metrics.service.js";
+import statusService from "../services/status.service.js";
+import logger from "../config/logger.js";
+import { broadcastReading } from "../websocket/wsHandler.js";
 
 /**
  * POST /api/telemetry
@@ -18,48 +24,59 @@ import { broadcastReading } from '../websocket/wsHandler.js';
  */
 export async function receiveTelemetry(req, res) {
   const startTime = Date.now();
-  
+
   try {
     // Registrar recebimento de telemetria
     metricsService.recordTelemetryReceived();
-    
+
     // Detectar formato baseado na presença do campo 'mac' vs 'node_mac'
     // Formato AGUADA-1 tem 'mac' e 'distance_mm' (sem 'type')
     // Formato antigo tem 'mac' e 'type'
-    const isIndividualFormat = 'mac' in req.body && ('type' in req.body || 'distance_mm' in req.body);
-    
+    const isIndividualFormat =
+      "mac" in req.body && ("type" in req.body || "distance_mm" in req.body);
+
     let result;
     if (isIndividualFormat) {
       result = await receiveIndividualTelemetry(req, res);
     } else {
       result = await receiveAggregatedTelemetry(req, res);
     }
-    
+
     // Registrar latência
     const latency = Date.now() - startTime;
     metricsService.recordLatency(latency);
-    metricsService.recordEndpointRequest('POST', '/api/telemetry', res.statusCode || 200, latency);
-    
+    metricsService.recordEndpointRequest(
+      "POST",
+      "/api/telemetry",
+      res.statusCode || 200,
+      latency
+    );
+
     // Registrar processamento bem-sucedido
     if (res.statusCode < 400) {
       metricsService.recordTelemetryProcessed();
     } else {
       metricsService.recordTelemetryFailed();
     }
-    
+
     return result;
   } catch (error) {
     // Registrar erro
     const latency = Date.now() - startTime;
     metricsService.recordLatency(latency);
-    metricsService.recordEndpointRequest('POST', '/api/telemetry', 500, latency);
+    metricsService.recordEndpointRequest(
+      "POST",
+      "/api/telemetry",
+      500,
+      latency
+    );
     metricsService.recordTelemetryFailed();
-    metricsService.recordError('telemetry_error', error.message);
-    
-    logger.error('Erro ao receber telemetria:', error);
+    metricsService.recordError("telemetry_error", error.message);
+
+    logger.error("Erro ao receber telemetria:", error);
     return res.status(500).json({
       success: false,
-      error: 'Erro interno do servidor',
+      error: "Erro interno do servidor",
     });
   }
 }
@@ -74,57 +91,58 @@ async function receiveIndividualTelemetry(req, res) {
   try {
     // Validar payload
     const validation = validateIndividualTelemetry(req.body);
-    
+
     if (!validation.success) {
-      logger.warn('Telemetria individual inválida', { errors: validation.error.errors });
+      logger.warn("Telemetria individual inválida", {
+        errors: validation.error.errors,
+      });
       return res.status(400).json({
         success: false,
-        error: 'Validação falhou',
+        error: "Validação falhou",
         details: validation.error.errors,
       });
     }
-    
+
     const data = validation.data;
-    
+
     // Detectar formato: AGUADA-1 tem distance_mm, formato antigo tem type+value
-    const isAguada1Format = 'distance_mm' in data;
-    
+    const isAguada1Format = "distance_mm" in data;
+
     let mac, type, value, battery, rssi, uptime, valorReal, unidade, sensor;
-    
+
     if (isAguada1Format) {
       // Formato AGUADA-1: {"mac":"...","distance_mm":2450,"vcc_bat_mv":4900,"rssi":-50}
       mac = data.mac;
-      type = 'distance_cm'; // Sempre distance_cm no formato AGUADA-1
+      type = "distance_cm"; // Sempre distance_cm no formato AGUADA-1
       value = data.distance_mm;
       battery = data.vcc_bat_mv; // vcc_bat_mv → battery
       rssi = data.rssi;
       uptime = undefined; // Não disponível no formato AGUADA-1
-      
+
       // Converter distance_mm → distance_cm (dividir por 10)
       // Ex: 2450mm = 245.0cm
       valorReal = value / 10.0;
-      unidade = 'cm';
-      
+      unidade = "cm";
+
       // Identificar sensor apenas por MAC (formato AGUADA-1)
       sensor = await sensorService.identifySensorByMacOnly(mac);
-      
+
       if (!sensor) {
         logger.warn(`Sensor não encontrado (AGUADA-1): MAC=${mac}`);
         return res.status(404).json({
           success: false,
-          error: 'Sensor não registrado',
+          error: "Sensor não registrado",
           mac,
-          format: 'AGUADA-1',
+          format: "AGUADA-1",
         });
       }
-      
-      logger.info('Telemetria AGUADA-1 recebida', {
+
+      logger.info("Telemetria AGUADA-1 recebida", {
         mac,
         distance_mm: value,
         distance_cm: valorReal,
         vcc_bat_mv: battery,
       });
-      
     } else {
       // Formato antigo: {"mac":"...","type":"distance_cm","value":2448,"battery":5000,"rssi":-50}
       mac = data.mac;
@@ -133,50 +151,54 @@ async function receiveIndividualTelemetry(req, res) {
       battery = data.battery;
       rssi = data.rssi;
       uptime = data.uptime;
-      
+
       // Identificar sensor pelo MAC + tipo de variável
       sensor = await sensorService.identifySensorByMac(mac, type);
-      
+
       if (!sensor) {
         logger.warn(`Sensor desconhecido: MAC=${mac}, type=${type}`);
         return res.status(404).json({
           success: false,
-          error: 'Sensor não registrado',
+          error: "Sensor não registrado",
           mac,
           type,
         });
       }
-      
+
       // Converter valor conforme tipo
-      if (type === 'distance_cm') {
+      if (type === "distance_cm") {
         // distance_cm vem multiplicado por 100 (ex: 24480 = 244.8 cm)
         valorReal = value / 100.0;
-        unidade = 'cm';
+        unidade = "cm";
       } else {
         // valve_in, valve_out, sound_in são estados (0 ou 1)
         valorReal = value;
-        unidade = 'boolean';
+        unidade = "boolean";
       }
     }
-    
+
     const datetime = new Date();
-    
+
     // Verificar duplicata antes de inserir
-    const isDup = await duplicateService.isDuplicate(sensor.sensor_id, datetime, valorReal);
+    const isDup = await duplicateService.isDuplicate(
+      sensor.sensor_id,
+      datetime,
+      valorReal
+    );
     if (isDup) {
-      logger.warn('Leitura duplicada ignorada', {
+      logger.warn("Leitura duplicada ignorada", {
         sensor_id: sensor.sensor_id,
         type,
         valor: valorReal,
       });
       return res.status(200).json({
         success: true,
-        message: 'Leitura duplicada ignorada',
+        message: "Leitura duplicada ignorada",
         sensor_id: sensor.sensor_id,
         duplicate: true,
       });
     }
-    
+
     // Inserir leitura bruta
     await readingService.insertRawReading({
       sensor_id: sensor.sensor_id,
@@ -191,57 +213,69 @@ async function receiveIndividualTelemetry(req, res) {
         node_mac: mac,
         raw_value: value,
       },
-      fonte: 'sensor',
+      fonte: "sensor",
       autor: mac,
-      modo: 'automatica',
+      modo: "automatica",
       observacao: null,
       datetime,
     });
-    
+
+    // Registrar heartbeat no status service (sensor online)
+    statusService.recordSensorHeartbeat(sensor.sensor_id, {
+      mac,
+      rssi,
+      battery,
+      uptime,
+      value: valorReal,
+    });
+
     // Adicionar à fila para processamento assíncrono (não bloqueia API)
-    queueService.enqueueReading({
-      sensor,
-      valorReal,
-      elementoParametros: sensor.elemento_parametros,
-      datetime,
-      type,
-    }).catch(err => {
-      logger.error('Erro ao adicionar leitura à fila:', err);
-      // Fallback: processar diretamente se a fila falhar
-      if (type === 'distance_cm') {
-        compressionService.processCompression(
-          sensor,
-          valorReal,
-          sensor.elemento_parametros,
-          datetime
-        ).catch(compErr => {
-          logger.error('Erro no processamento de fallback:', compErr);
-        });
-      }
-    });
-    
+    queueService
+      .enqueueReading({
+        sensor,
+        valorReal,
+        elementoParametros: sensor.elemento_parametros,
+        datetime,
+        type,
+      })
+      .catch((err) => {
+        logger.error("Erro ao adicionar leitura à fila:", err);
+        // Fallback: processar diretamente se a fila falhar
+        if (type === "distance_cm") {
+          compressionService
+            .processCompression(
+              sensor,
+              valorReal,
+              sensor.elemento_parametros,
+              datetime
+            )
+            .catch((compErr) => {
+              logger.error("Erro no processamento de fallback:", compErr);
+            });
+        }
+      });
+
     // Invalidar cache de leituras (assíncrono, não bloqueia)
-    cacheService.invalidateReadings().catch(err => {
-      logger.warn('Erro ao invalidar cache:', err);
+    cacheService.invalidateReadings().catch((err) => {
+      logger.warn("Erro ao invalidar cache:", err);
     });
-    
-    logger.info('Telemetria individual recebida', {
+
+    logger.info("Telemetria individual recebida", {
       mac,
       type,
       value: valorReal,
       sensor_id: sensor.sensor_id,
     });
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Telemetria recebida com sucesso',
+      message: "Telemetria recebida com sucesso",
       sensor_id: sensor.sensor_id,
       type,
       value: valorReal,
     });
-    
   } catch (error) {
-    logger.error('Erro ao processar telemetria individual:', error);
+    logger.error("Erro ao processar telemetria individual:", error);
     throw error;
   }
 }
@@ -253,70 +287,74 @@ async function receiveAggregatedTelemetry(req, res) {
   try {
     // Validar payload
     const validation = validateTelemetry(req.body);
-    
+
     if (!validation.success) {
-      logger.warn('Telemetria inválida', { errors: validation.error.errors });
+      logger.warn("Telemetria inválida", { errors: validation.error.errors });
       return res.status(400).json({
         success: false,
-        error: 'Validação falhou',
+        error: "Validação falhou",
         details: validation.error.errors,
       });
     }
-    
+
     const { node_mac, datetime, data, meta } = validation.data;
-    
+
     const processedReadings = [];
-    
+
     // Processar cada leitura do payload
     for (const reading of data) {
       const { label, value, unit } = reading;
-      
+
       // Identificar sensor pelo MAC + variável
       const sensor = await sensorService.identifySensorByMac(node_mac, label);
-      
+
       if (!sensor) {
         logger.warn(`Sensor desconhecido: MAC=${node_mac}, label=${label}`);
         continue; // Pular leitura desconhecida
       }
-      
+
       // Inserir leitura bruta
       await readingService.insertRawReading({
         sensor_id: sensor.sensor_id,
         elemento_id: sensor.elemento_id,
         variavel: label,
         valor: value,
-        unidade: unit || 'cm',
+        unidade: unit || "cm",
         meta: {
           ...meta,
           node_mac,
         },
-        fonte: 'sensor',
+        fonte: "sensor",
         autor: node_mac,
-        modo: 'automatica',
+        modo: "automatica",
         observacao: null,
         datetime: new Date(datetime),
       });
-      
+
       // Adicionar à fila para processamento assíncrono
-      queueService.enqueueReading({
-        sensor,
-        valorReal: value,
-        elementoParametros: sensor.elemento_parametros,
-        datetime: new Date(datetime),
-        type: label,
-      }).catch(err => {
-        logger.error('Erro ao adicionar leitura à fila:', err);
-        // Fallback: processar diretamente
-        compressionService.processCompression(
+      queueService
+        .enqueueReading({
           sensor,
-          value,
-          sensor.elemento_parametros,
-          new Date(datetime)
-        ).catch(compErr => {
-          logger.error('Erro no processamento de fallback:', compErr);
+          valorReal: value,
+          elementoParametros: sensor.elemento_parametros,
+          datetime: new Date(datetime),
+          type: label,
+        })
+        .catch((err) => {
+          logger.error("Erro ao adicionar leitura à fila:", err);
+          // Fallback: processar diretamente
+          compressionService
+            .processCompression(
+              sensor,
+              value,
+              sensor.elemento_parametros,
+              new Date(datetime)
+            )
+            .catch((compErr) => {
+              logger.error("Erro no processamento de fallback:", compErr);
+            });
         });
-      });
-      
+
       processedReadings.push({
         sensor_id: sensor.sensor_id,
         elemento_id: sensor.elemento_id,
@@ -329,31 +367,30 @@ async function receiveAggregatedTelemetry(req, res) {
         mac: node_mac,
         label: reading.label,
         value: value,
-        datetime: datetime
+        datetime: datetime,
       });
     }
-    
+
     // Invalidar cache de leituras
-    cacheService.invalidateReadings().catch(err => {
-      logger.warn('Erro ao invalidar cache:', err);
+    cacheService.invalidateReadings().catch((err) => {
+      logger.warn("Erro ao invalidar cache:", err);
     });
-    
-    logger.info('Telemetria recebida', {
+
+    logger.info("Telemetria recebida", {
       node_mac,
       readings: processedReadings.length,
     });
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Telemetria recebida com sucesso',
+      message: "Telemetria recebida com sucesso",
       processed: processedReadings.length,
     });
-    
   } catch (error) {
-    logger.error('Erro ao receber telemetria:', error);
+    logger.error("Erro ao receber telemetria:", error);
     return res.status(500).json({
       success: false,
-      error: 'Erro interno do servidor',
+      error: "Erro interno do servidor",
     });
   }
 }
@@ -366,82 +403,95 @@ export async function receiveManualReading(req, res) {
   try {
     // Validar payload
     const validation = validateManualReading(req.body);
-    
+
     if (!validation.success) {
-      logger.warn('Leitura manual inválida', { errors: validation.error.errors });
+      logger.warn("Leitura manual inválida", {
+        errors: validation.error.errors,
+      });
       return res.status(400).json({
         success: false,
-        error: 'Validação falhou',
+        error: "Validação falhou",
         details: validation.error.errors,
       });
     }
-    
-    const { sensor_id, value, variable, datetime, usuario, observacao } = validation.data;
-    
+
+    const { sensor_id, value, variable, datetime, usuario, observacao } =
+      validation.data;
+
     // Buscar sensor
     const sensor = await sensorService.getSensorById(sensor_id);
-    
+
     if (!sensor) {
       logger.warn(`Sensor não encontrado: ${sensor_id}`);
       return res.status(404).json({
         success: false,
-        error: 'Sensor não encontrado',
+        error: "Sensor não encontrado",
       });
     }
-    
+
     // Se recebeu nivel_cm mas o sensor usa distance_cm, converter
     let variavelFinal = variable;
     let valorFinal = value;
-    
-    if (variable === 'nivel_cm' && sensor.variavel === 'distance_cm') {
+
+    if (variable === "nivel_cm" && sensor.variavel === "distance_cm") {
       // Converter nível para distância
       // nivel_cm = altura_cm - distancia_cm + offset
       // distancia_cm = altura_cm - nivel_cm + offset
       // Precisamos dos parâmetros do elemento para calcular
       const elementoParametros = sensor.elemento_parametros || {};
       const altura_cm = elementoParametros.altura_cm || 400;
-      const offset_cm = elementoParametros.offset_cm || elementoParametros.hsensor_cm || 20;
+      const offset_cm =
+        elementoParametros.offset_cm || elementoParametros.hsensor_cm || 20;
       valorFinal = altura_cm - value + offset_cm;
-      variavelFinal = 'distance_cm';
-      logger.info('Convertido nivel_cm para distance_cm', { nivel_cm: value, distance_cm: valorFinal });
+      variavelFinal = "distance_cm";
+      logger.info("Convertido nivel_cm para distance_cm", {
+        nivel_cm: value,
+        distance_cm: valorFinal,
+      });
     }
-    
+
     // Inserir leitura bruta
     await readingService.insertRawReading({
       sensor_id: sensor.sensor_id,
       elemento_id: sensor.elemento_id,
       variavel: variavelFinal,
       valor: valorFinal,
-      unidade: variable === 'nivel_cm' ? 'cm' : (variable === 'pressao_bar' ? 'bar' : 'lpm'),
+      unidade:
+        variable === "nivel_cm"
+          ? "cm"
+          : variable === "pressao_bar"
+          ? "bar"
+          : "lpm",
       meta: {
         manual: true,
-        volume_m3: observacao?.includes('Volume:') ? parseFloat(observacao.match(/Volume: ([\d.]+)/)?.[1] || 0) : null,
+        volume_m3: observacao?.includes("Volume:")
+          ? parseFloat(observacao.match(/Volume: ([\d.]+)/)?.[1] || 0)
+          : null,
         original_variable: variable,
         original_value: value,
       },
-      fonte: 'usuario',
+      fonte: "usuario",
       autor: usuario,
-      modo: 'manual',
+      modo: "manual",
       observacao,
       datetime: datetime ? new Date(datetime) : new Date(),
     });
-    
-    logger.info('Leitura manual recebida', {
+
+    logger.info("Leitura manual recebida", {
       sensor_id,
       usuario,
       valor: value,
     });
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Leitura manual registrada com sucesso',
+      message: "Leitura manual registrada com sucesso",
     });
-    
   } catch (error) {
-    logger.error('Erro ao receber leitura manual:', error);
+    logger.error("Erro ao receber leitura manual:", error);
     return res.status(500).json({
       success: false,
-      error: 'Erro interno do servidor',
+      error: "Erro interno do servidor",
     });
   }
 }
@@ -454,16 +504,16 @@ export async function receiveCalibration(req, res) {
   try {
     // Validar payload
     const validation = validateCalibration(req.body);
-    
+
     if (!validation.success) {
-      logger.warn('Calibração inválida', { errors: validation.error.errors });
+      logger.warn("Calibração inválida", { errors: validation.error.errors });
       return res.status(400).json({
         success: false,
-        error: 'Validação falhou',
+        error: "Validação falhou",
         details: validation.error.errors,
       });
     }
-    
+
     const {
       sensor_id,
       valor_referencia,
@@ -472,21 +522,21 @@ export async function receiveCalibration(req, res) {
       tipo,
       observacao,
     } = validation.data;
-    
+
     // Buscar sensor
     const sensor = await sensorService.getSensorById(sensor_id);
-    
+
     if (!sensor) {
       logger.warn(`Sensor não encontrado: ${sensor_id}`);
       return res.status(404).json({
         success: false,
-        error: 'Sensor não encontrado',
+        error: "Sensor não encontrado",
       });
     }
-    
+
     // Calcular ajuste (offset)
     const ajuste = valor_referencia - valor_sensor;
-    
+
     // Registrar calibração
     const query = `
       INSERT INTO aguada.calibracoes (
@@ -496,8 +546,8 @@ export async function receiveCalibration(req, res) {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING calibracao_id
     `;
-    
-    const pool = (await import('../config/database.js')).default;
+
+    const pool = (await import("../config/database.js")).default;
     const result = await pool.query(query, [
       sensor_id,
       sensor.elemento_id,
@@ -508,28 +558,27 @@ export async function receiveCalibration(req, res) {
       tipo,
       observacao,
     ]);
-    
+
     // Atualizar offset no sensor
     await sensorService.updateSensorOffset(sensor_id, ajuste);
-    
-    logger.info('Calibração registrada', {
+
+    logger.info("Calibração registrada", {
       calibracao_id: result.rows[0].calibracao_id,
       sensor_id,
       ajuste,
     });
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Calibração registrada com sucesso',
+      message: "Calibração registrada com sucesso",
       calibracao_id: result.rows[0].calibracao_id,
       ajuste_aplicado: ajuste,
     });
-    
   } catch (error) {
-    logger.error('Erro ao registrar calibração:', error);
+    logger.error("Erro ao registrar calibração:", error);
     return res.status(500).json({
       success: false,
-      error: 'Erro interno do servidor',
+      error: "Erro interno do servidor",
     });
   }
 }

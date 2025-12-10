@@ -527,10 +527,14 @@
           <div class="stat-label">Última Sincronização</div>
         </div>
       </div>
+
+      <!-- Widget de Status do Sistema -->
+      <div id="systemStatusWidget" style="margin-top: 20px"></div>
     </div>
 
     <script src="assets/layout.js"></script>
     <script src="assets/api-service.js"></script>
+    <script src="assets/status-monitor.js"></script>
     <script src="assets/ui-utils.js"></script>
     <script src="assets/app.js"></script>
     <script>
@@ -630,6 +634,7 @@
       };
 
       // Renderizar diagrama hidráulico
+      // REGRA GLOBAL: Sensor offline exibe último valor conhecido em cinza transparente
       function renderDiagram() {
         const diagram = document.getElementById("hydraulicDiagram");
         if (!diagram) return;
@@ -661,21 +666,28 @@
               : null;
           const volumePercent = getVolumePercent(id, distance_cm);
           const volumeM3 = calculateVolumeM3(id, distance_cm);
-          const isOnline =
-            reading.timestamp &&
-            new Date() - new Date(reading.timestamp) < 5 * 60 * 1000;
 
-          const gaugeColor =
-            volumePercent <= 20
-              ? "#ef4444"
-              : volumePercent <= 50
-              ? "#f59e0b"
-              : "#10b981";
+          // REGRA GLOBAL: Verificar status offline
+          const isOffline =
+            !reading.timestamp ||
+            new Date() - new Date(reading.timestamp) >= 5 * 60 * 1000;
+
+          // Cor: cinza se offline, senão baseado no nível
+          const gaugeColor = isOffline
+            ? "#9ca3af"
+            : volumePercent <= 20
+            ? "#ef4444"
+            : volumePercent <= 50
+            ? "#f59e0b"
+            : "#10b981";
+
+          // Classe CSS para offline
+          const offlineClass = isOffline ? "sensor-offline" : "";
 
           html += `
-                    <div class="reservoir-visual" style="top: ${
-                      pos.top
-                    }; left: ${pos.left};" data-id="${id}">
+                    <div class="reservoir-visual ${offlineClass}" style="top: ${
+            pos.top
+          }; left: ${pos.left};" data-id="${id}">
                         <div class="reservoir-tank-visual">
                             <div class="reservoir-level-visual" 
                                  style="height: ${volumePercent}%; background: linear-gradient(to top, ${gaugeColor}, ${gaugeColor}88);">
@@ -722,6 +734,7 @@
       }
 
       // Renderizar cards dos reservatórios
+      // REGRA GLOBAL: Sensor offline exibe último valor conhecido em cinza transparente
       function renderCards() {
         const cardsSection = document.getElementById("cardsSection");
         if (!cardsSection) {
@@ -757,27 +770,89 @@
                 : null;
             const volumePercent = getVolumePercent(id, distance_cm);
             const volumeM3 = calculateVolumeM3(id, distance_cm);
-            const isOnline =
-              reading.timestamp &&
-              new Date() - new Date(reading.timestamp) < 5 * 60 * 1000;
 
-            const gaugeColor =
-              volumePercent <= 20
-                ? "#ef4444"
-                : volumePercent <= 50
-                ? "#f59e0b"
-                : "#10b981";
+            // REGRA GLOBAL: Verificar status do sensor (online/offline)
+            const sensorStatusInfo = window.checkSensorStatus
+              ? window.checkSensorStatus(reading.timestamp, 5 * 60 * 1000)
+              : {
+                  isOffline:
+                    !reading.timestamp ||
+                    new Date() - new Date(reading.timestamp) >= 5 * 60 * 1000,
+                };
+
+            const isOffline = sensorStatusInfo.isOffline;
+            const isWarning = sensorStatusInfo.isWarning;
+
+            // Obter status do StatusMonitor se disponível
+            let sensorStatus = isOffline
+              ? "offline"
+              : isWarning
+              ? "warning"
+              : "online";
+            let statusElapsed = null;
+            if (window.statusMonitor) {
+              const statusInfo = window.statusMonitor.getSensorStatus(
+                reading.sensor_id || id
+              );
+              sensorStatus = statusInfo.status || sensorStatus;
+              statusElapsed = statusInfo.elapsedSec;
+            }
+
+            // Gerar badge de status
+            const statusBadge = window.StatusMonitor
+              ? window.StatusMonitor.renderStatusBadge(sensorStatus, {
+                  size: "small",
+                  showLabel: true,
+                  elapsedSec: statusElapsed,
+                })
+              : `<span class="card-status">${
+                  sensorStatus === "online"
+                    ? "● Online"
+                    : sensorStatus === "warning"
+                    ? "● Intermitente"
+                    : "● Offline"
+                }</span>`;
+
+            // Cores: se offline, usar cinza
+            const gaugeColor = isOffline
+              ? "#9ca3af"
+              : volumePercent <= 20
+              ? "#ef4444"
+              : volumePercent <= 50
+              ? "#f59e0b"
+              : "#10b981";
+
+            // Classes CSS para estado offline
+            const cardClass = isOffline
+              ? "reservoir-card sensor-offline"
+              : "reservoir-card";
+            const volumeDisplayClass = isOffline
+              ? "volume-display offline"
+              : "volume-display";
+
+            // Formatar timestamp para exibição
+            const timestampStr = reading.timestamp
+              ? typeof formatDateTime === "function"
+                ? formatDateTime(reading.timestamp)
+                : new Date(reading.timestamp).toLocaleString("pt-BR")
+              : "Sem dados";
+
+            // Indicador de offline com última leitura
+            const offlineIndicator =
+              isOffline && reading.timestamp
+                ? `<div class="offline-indicator">Última leitura: ${timestampStr}</div>`
+                : isOffline
+                ? `<div class="offline-indicator">Aguardando dados...</div>`
+                : "";
 
             return `
-                    <div class="reservoir-card" data-id="${id}">
+                    <div class="${cardClass}" data-id="${id}">
                         <div class="card-header ${id.toLowerCase()}">
                             <span>${sensor.name}</span>
-                            <span class="card-status">${
-                              isOnline ? "● Online" : "● Offline"
-                            }</span>
+                            ${statusBadge}
                         </div>
                         <div class="card-body">
-                            <div class="volume-display">
+                            <div class="${volumeDisplayClass}">
                                 <div class="volume-percent" style="color: ${gaugeColor}">
                                     ${volumePercent.toFixed(1)}%
                                 </div>
@@ -790,6 +865,8 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            ${offlineIndicator}
                             
                             <div class="data-grid">
                                 <div class="data-cell">
@@ -1003,8 +1080,25 @@
           renderCards();
           updateStats();
           updateSystemStatus();
+          updateStatusWidget();
         } catch (error) {
           console.error("[Dashboard] Erro ao buscar dados:", error);
+        }
+      }
+
+      // Atualizar widget de status do sistema
+      async function updateStatusWidget() {
+        const widgetEl = document.getElementById("systemStatusWidget");
+        if (!widgetEl || !window.statusMonitor) return;
+
+        try {
+          await window.statusMonitor.refresh();
+          widgetEl.innerHTML = window.statusMonitor.renderSystemWidget();
+        } catch (error) {
+          console.warn(
+            "[Dashboard] Erro ao atualizar widget de status:",
+            error
+          );
         }
       }
 
@@ -1026,6 +1120,27 @@
 
           console.log("[Dashboard] API Service pronto");
 
+          // Registrar sensores conhecidos no backend
+          try {
+            const registerResult =
+              await window.apiService.registerKnownSensors();
+            console.log("[Dashboard] Sensores registrados:", registerResult);
+          } catch (regError) {
+            console.warn("[Dashboard] Erro ao registrar sensores:", regError);
+          }
+
+          // Inicializar Status Monitor
+          if (window.StatusMonitor) {
+            window.statusMonitor = new window.StatusMonitor(window.apiService);
+            await window.statusMonitor.init(30000); // Poll a cada 30s
+            console.log("[Dashboard] StatusMonitor inicializado");
+
+            // Listener para atualizações de status
+            window.statusMonitor.onUpdate((statusData) => {
+              updateStatusWidget();
+            });
+          }
+
           // Buscar dados iniciais
           await pollData();
 
@@ -1038,6 +1153,7 @@
             renderCards();
             updateStats();
             updateSystemStatus();
+            updateStatusWidget();
           });
 
           console.log("[Dashboard] Inicializado com sucesso!");

@@ -23,7 +23,11 @@ class ApiService {
    * Detecta URL base do backend
    */
   _getBaseURL() {
-    // Usa caminho relativo para passar pelo nginx proxy
+    // Modo desenvolvimento: porta 5000 local
+    // Modo produção (nginx): caminho relativo /api
+    if (window.location.port === "8080") {
+      return "http://localhost:5000/api";
+    }
     return "/api";
   }
 
@@ -31,6 +35,10 @@ class ApiService {
    * Detecta URL do WebSocket
    */
   _getWebSocketURL() {
+    // Modo desenvolvimento: porta 5000 local
+    if (window.location.port === "8080") {
+      return "ws://localhost:5000/ws";
+    }
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     return `${protocol}//${host}/ws`;
@@ -142,6 +150,128 @@ class ApiService {
     } catch (error) {
       console.error("[API] Erro ao buscar status dos sensores:", error);
       return [];
+    }
+  }
+
+  /**
+   * GET /api/status
+   * Resumo geral do sistema (sensores + gateways)
+   */
+  async getSystemStatusSummary() {
+    try {
+      const data = await this._fetchWithRetry(`${this.baseURL}/status`);
+      return data.data || {};
+    } catch (error) {
+      console.error("[API] Erro ao buscar status do sistema:", error);
+      return { systemStatus: "unknown", sensors: {}, gateways: {} };
+    }
+  }
+
+  /**
+   * GET /api/status/sensors
+   * Status detalhado de todos os sensores com timeout tracking
+   */
+  async getDetailedSensorsStatus() {
+    try {
+      const data = await this._fetchWithRetry(`${this.baseURL}/status/sensors`);
+      return data;
+    } catch (error) {
+      console.error(
+        "[API] Erro ao buscar status detalhado dos sensores:",
+        error
+      );
+      return { summary: {}, data: [] };
+    }
+  }
+
+  /**
+   * GET /api/status/gateways
+   * Status de todos os gateways
+   */
+  async getGatewaysStatus() {
+    try {
+      const data = await this._fetchWithRetry(
+        `${this.baseURL}/status/gateways`
+      );
+      return data;
+    } catch (error) {
+      console.error("[API] Erro ao buscar status dos gateways:", error);
+      return { summary: {}, data: [] };
+    }
+  }
+
+  /**
+   * GET /api/status/config
+   * Configurações de timeout
+   */
+  async getStatusConfig() {
+    try {
+      const data = await this._fetchWithRetry(`${this.baseURL}/status/config`);
+      return data.data || {};
+    } catch (error) {
+      console.error("[API] Erro ao buscar configurações de status:", error);
+      return {};
+    }
+  }
+
+  /**
+   * PUT /api/status/config
+   * Atualiza configurações de timeout
+   */
+  async updateStatusConfig(config) {
+    try {
+      const data = await this._fetchWithRetry(`${this.baseURL}/status/config`, {
+        method: "PUT",
+        body: JSON.stringify(config),
+      });
+      return data;
+    } catch (error) {
+      console.error("[API] Erro ao atualizar configurações de status:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * POST /api/status/register-sensors
+   * Registra sensores conhecidos no sistema de status
+   */
+  async registerKnownSensors(sensors = null) {
+    try {
+      const body = sensors ? { sensors } : {};
+      const data = await this._fetchWithRetry(
+        `${this.baseURL}/status/register-sensors`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        }
+      );
+      return data;
+    } catch (error) {
+      console.error("[API] Erro ao registrar sensores:", error);
+      return { success: false };
+    }
+  }
+
+  /**
+   * POST /api/status/simulate
+   * Simula um sensor enviando dados (para testes)
+   */
+  async simulateSensor(sensorId, data = {}) {
+    try {
+      const result = await this._fetchWithRetry(
+        `${this.baseURL}/status/simulate`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            sensor_id: sensorId,
+            ...data,
+          }),
+        }
+      );
+      return result;
+    } catch (error) {
+      console.error("[API] Erro ao simular sensor:", error);
+      return { success: false };
     }
   }
 

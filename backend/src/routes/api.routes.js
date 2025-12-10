@@ -8,6 +8,7 @@ import systemController from "../controllers/system.controller.js";
 import gatewayController from "../controllers/gateway.controller.js";
 import databaseController from "../controllers/database.controller.js";
 import firmwareController from "../controllers/firmware.controller.js";
+import statusController from "../controllers/status.controller.js";
 import exportService from "../services/export.service.js";
 
 const router = express.Router();
@@ -265,6 +266,76 @@ router.get("/firmware/gateways", firmwareController.listKnownGateways);
  * Atualiza versão de firmware (força atualização nos gateways)
  */
 router.put("/firmware/version", firmwareController.updateFirmwareVersion);
+
+// ============================================================================
+// STATUS (ONLINE/OFFLINE)
+// ============================================================================
+
+/**
+ * GET /api/status
+ * Resumo geral do sistema (sensores + gateways)
+ */
+router.get("/status", statusController.getSystemStatus);
+
+/**
+ * GET /api/status/sensors
+ * Status de todos os sensores
+ */
+router.get("/status/sensors", statusController.getSensorsStatus);
+
+/**
+ * GET /api/status/sensors/:sensor_id
+ * Status de um sensor específico
+ */
+router.get("/status/sensors/:sensor_id", statusController.getSensorStatus);
+
+/**
+ * DELETE /api/status/sensors/:sensor_id
+ * Limpa status de um sensor (reset)
+ */
+router.delete("/status/sensors/:sensor_id", statusController.clearSensorStatus);
+
+/**
+ * GET /api/status/gateways
+ * Status de todos os gateways
+ */
+router.get("/status/gateways", statusController.getGatewaysStatus);
+
+/**
+ * GET /api/status/gateways/:gateway_id
+ * Status de um gateway específico
+ */
+router.get("/status/gateways/:gateway_id", statusController.getGatewayStatus);
+
+/**
+ * GET /api/status/config
+ * Configurações de timeout
+ */
+router.get("/status/config", statusController.getStatusConfig);
+
+/**
+ * PUT /api/status/config
+ * Atualiza configurações de timeout
+ */
+router.put("/status/config", statusController.updateStatusConfig);
+
+/**
+ * POST /api/status/reset
+ * Reset de todos os status
+ */
+router.post("/status/reset", statusController.resetAllStatus);
+
+/**
+ * POST /api/status/register-sensors
+ * Registra sensores conhecidos no sistema de status
+ */
+router.post("/status/register-sensors", statusController.registerKnownSensors);
+
+/**
+ * POST /api/status/simulate
+ * Simula um sensor enviando dados (para testes)
+ */
+router.post("/status/simulate", statusController.simulateSensor);
 
 // ============================================================================
 // HEALTH

@@ -2,29 +2,72 @@ import { pool } from "../config/database.js";
 import logger from "../config/logger.js";
 
 /**
+ * Verifica se a tabela aguada.elementos existe
+ */
+async function checkElementosTableExists() {
+  try {
+    const result = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'aguada' 
+        AND table_name = 'elementos'
+      );
+    `);
+    return result.rows[0].exists;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * GET /api/sensors
  * Get all sensors
  */
 export async function getAllSensors(req, res) {
   try {
-    const result = await pool.query(`
-      SELECT 
-        s.sensor_id,
-        s.elemento_id,
-        s.node_mac,
-        s.tipo,
-        s.modelo,
-        s.variavel,
-        s.unidade,
-        s.status,
-        s.ultima_calibracao,
-        s.criado_em,
-        e.nome as elemento_nome,
-        e.tipo as elemento_tipo
-      FROM aguada.sensores s
-      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
-      ORDER BY s.sensor_id
-    `);
+    const hasElementos = await checkElementosTableExists();
+
+    let query;
+    if (hasElementos) {
+      query = `
+        SELECT 
+          s.sensor_id,
+          s.elemento_id,
+          s.node_mac,
+          s.tipo,
+          s.modelo,
+          s.variavel,
+          s.unidade,
+          s.status,
+          s.ultima_calibracao,
+          s.criado_em,
+          e.nome as elemento_nome,
+          e.tipo as elemento_tipo
+        FROM aguada.sensores s
+        LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
+        ORDER BY s.sensor_id
+      `;
+    } else {
+      query = `
+        SELECT 
+          s.sensor_id,
+          s.elemento_id,
+          s.node_mac,
+          s.tipo,
+          s.modelo,
+          s.variavel,
+          s.unidade,
+          s.status,
+          s.ultima_calibracao,
+          s.criado_em,
+          NULL as elemento_nome,
+          NULL as elemento_tipo
+        FROM aguada.sensores s
+        ORDER BY s.sensor_id
+      `;
+    }
+
+    const result = await pool.query(query);
 
     res.status(200).json({
       success: true,
@@ -47,20 +90,33 @@ export async function getAllSensors(req, res) {
 export async function getSensorById(req, res) {
   try {
     const { sensor_id } = req.params;
+    const hasElementos = await checkElementosTableExists();
 
-    const result = await pool.query(
-      `
-      SELECT 
-        s.*,
-        e.nome as elemento_nome,
-        e.tipo as elemento_tipo,
-        e.parametros as elemento_parametros
-      FROM aguada.sensores s
-      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
-      WHERE s.sensor_id = $1
-    `,
-      [sensor_id]
-    );
+    let query;
+    if (hasElementos) {
+      query = `
+        SELECT 
+          s.*,
+          e.nome as elemento_nome,
+          e.tipo as elemento_tipo,
+          e.parametros as elemento_parametros
+        FROM aguada.sensores s
+        LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
+        WHERE s.sensor_id = $1
+      `;
+    } else {
+      query = `
+        SELECT 
+          s.*,
+          NULL as elemento_nome,
+          NULL as elemento_tipo,
+          NULL as elemento_parametros
+        FROM aguada.sensores s
+        WHERE s.sensor_id = $1
+      `;
+    }
+
+    const result = await pool.query(query, [sensor_id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -163,24 +219,49 @@ export async function updateSensor(req, res) {
  */
 export async function getSensorsStatus(req, res) {
   try {
-    const result = await pool.query(`
-      SELECT 
-        s.sensor_id,
-        s.elemento_id,
-        s.status,
-        e.nome as elemento_nome,
-        MAX(l.datetime) as ultima_leitura,
-        CASE 
-          WHEN MAX(l.datetime) > NOW() - INTERVAL '5 minutes' THEN 'online'
-          WHEN MAX(l.datetime) > NOW() - INTERVAL '1 hour' THEN 'warning'
-          ELSE 'offline'
-        END as estado_conexao
-      FROM aguada.sensores s
-      LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
-      LEFT JOIN aguada.leituras_raw l ON s.sensor_id = l.sensor_id
-      GROUP BY s.sensor_id, s.elemento_id, s.status, e.nome
-      ORDER BY s.sensor_id
-    `);
+    const hasElementos = await checkElementosTableExists();
+
+    let query;
+    if (hasElementos) {
+      query = `
+        SELECT 
+          s.sensor_id,
+          s.elemento_id,
+          s.status,
+          e.nome as elemento_nome,
+          MAX(l.datetime) as ultima_leitura,
+          CASE 
+            WHEN MAX(l.datetime) > NOW() - INTERVAL '5 minutes' THEN 'online'
+            WHEN MAX(l.datetime) > NOW() - INTERVAL '1 hour' THEN 'warning'
+            ELSE 'offline'
+          END as estado_conexao
+        FROM aguada.sensores s
+        LEFT JOIN aguada.elementos e ON s.elemento_id = e.elemento_id
+        LEFT JOIN aguada.leituras_raw l ON s.sensor_id = l.sensor_id
+        GROUP BY s.sensor_id, s.elemento_id, s.status, e.nome
+        ORDER BY s.sensor_id
+      `;
+    } else {
+      query = `
+        SELECT 
+          s.sensor_id,
+          s.elemento_id,
+          s.status,
+          NULL as elemento_nome,
+          MAX(l.datetime) as ultima_leitura,
+          CASE 
+            WHEN MAX(l.datetime) > NOW() - INTERVAL '5 minutes' THEN 'online'
+            WHEN MAX(l.datetime) > NOW() - INTERVAL '1 hour' THEN 'warning'
+            ELSE 'offline'
+          END as estado_conexao
+        FROM aguada.sensores s
+        LEFT JOIN aguada.leituras_raw l ON s.sensor_id = l.sensor_id
+        GROUP BY s.sensor_id, s.elemento_id, s.status
+        ORDER BY s.sensor_id
+      `;
+    }
+
+    const result = await pool.query(query);
 
     const summary = {
       total: result.rows.length,

@@ -32,6 +32,129 @@
     </div>
 
     <div class="main-container">
+      <!-- Nova seção: Status Timeout Configuration -->
+      <div class="card" style="margin-bottom: 30px">
+        <div class="card-header">
+          <span>⏱️ Configuração de Timeout (Online/Offline)</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 12px; color: #666; margin-bottom: 15px">
+            Configure os tempos de timeout para detecção de status
+            online/offline dos sensores e gateway. Sensores que não enviam dados
+            dentro do timeout são considerados offline.
+          </p>
+
+          <form id="timeoutConfigForm">
+            <div class="grid-2col">
+              <div>
+                <label for="sensorTimeoutSec"
+                  >Timeout de Sensor (segundos)</label
+                >
+                <input
+                  type="number"
+                  id="sensorTimeoutSec"
+                  value="120"
+                  min="10"
+                  max="86400"
+                  title="Tempo sem dados para considerar sensor offline"
+                />
+                <small style="color: #666">Padrão: 120s (2 minutos)</small>
+              </div>
+              <div>
+                <label for="gatewayTimeoutSec"
+                  >Timeout de Gateway (segundos)</label
+                >
+                <input
+                  type="number"
+                  id="gatewayTimeoutSec"
+                  value="60"
+                  min="10"
+                  max="86400"
+                  title="Tempo sem dados para considerar gateway offline"
+                />
+                <small style="color: #666">Padrão: 60s (1 minuto)</small>
+              </div>
+              <div>
+                <label for="warningThresholdSec"
+                  >Limiar de Warning (segundos)</label
+                >
+                <input
+                  type="number"
+                  id="warningThresholdSec"
+                  value="60"
+                  min="10"
+                  max="86400"
+                  title="Tempo para mostrar status 'warning' antes de offline"
+                />
+                <small style="color: #666">Padrão: 60s (status amarelo)</small>
+              </div>
+              <div>
+                <label for="checkIntervalSec"
+                  >Intervalo de Verificação (segundos)</label
+                >
+                <input
+                  type="number"
+                  id="checkIntervalSec"
+                  value="30"
+                  min="5"
+                  max="300"
+                  title="Frequência de verificação de status"
+                />
+                <small style="color: #666">Padrão: 30s</small>
+              </div>
+            </div>
+
+            <div
+              id="timeoutConfigStatus"
+              style="margin-top: 15px; display: none"
+            ></div>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px">
+              <button type="submit" class="btn-success">
+                💾 Salvar Timeout
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                onclick="resetTimeoutConfig()"
+                style="background: #6b7280; color: white; border: none"
+              >
+                🔄 Restaurar Padrão
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                onclick="loadTimeoutConfig()"
+                style="background: #3b82f6; color: white; border: none"
+              >
+                🔃 Recarregar
+              </button>
+            </div>
+          </form>
+
+          <!-- Status atual do sistema -->
+          <div
+            style="
+              margin-top: 20px;
+              padding-top: 20px;
+              border-top: 1px solid #e5e7eb;
+            "
+          >
+            <h4 style="margin-bottom: 10px; color: #1e3c72">
+              📊 Status Atual do Sistema
+            </h4>
+            <div
+              id="currentSystemStatus"
+              style="padding: 15px; background: #f8fafc; border-radius: 8px"
+            >
+              <p style="color: #666; text-align: center">
+                ⏳ Carregando status...
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="card" style="margin-bottom: 30px">
         <div class="card-header">
           <span>Limites e Thresholds</span>
@@ -571,6 +694,236 @@
         }
       }
 
+      // ========== Timeout Configuration Functions ==========
+
+      async function loadTimeoutConfig() {
+        try {
+          if (!window.apiService) {
+            console.warn("[Config] API Service não disponível");
+            return;
+          }
+
+          const config = await window.apiService.getStatusConfig();
+
+          if (config) {
+            document.getElementById("sensorTimeoutSec").value =
+              config.sensorTimeoutSec || 120;
+            document.getElementById("gatewayTimeoutSec").value =
+              config.gatewayTimeoutSec || 60;
+            document.getElementById("warningThresholdSec").value =
+              config.warningThresholdSec || 60;
+            document.getElementById("checkIntervalSec").value =
+              config.checkIntervalSec || 30;
+
+            showTimeoutStatus(
+              "success",
+              "Configurações carregadas com sucesso"
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[Config] Erro ao carregar configurações de timeout:",
+            error
+          );
+          showTimeoutStatus(
+            "error",
+            "Erro ao carregar configurações: " + error.message
+          );
+        }
+      }
+
+      async function saveTimeoutConfig(e) {
+        e.preventDefault();
+
+        try {
+          if (!window.apiService) {
+            throw new Error("API Service não disponível");
+          }
+
+          const config = {
+            sensorTimeoutSec: parseInt(
+              document.getElementById("sensorTimeoutSec").value,
+              10
+            ),
+            gatewayTimeoutSec: parseInt(
+              document.getElementById("gatewayTimeoutSec").value,
+              10
+            ),
+            warningThresholdSec: parseInt(
+              document.getElementById("warningThresholdSec").value,
+              10
+            ),
+            checkIntervalSec: parseInt(
+              document.getElementById("checkIntervalSec").value,
+              10
+            ),
+          };
+
+          // Validação
+          if (config.sensorTimeoutSec < 10 || config.sensorTimeoutSec > 86400) {
+            throw new Error(
+              "Timeout de sensor deve estar entre 10 e 86400 segundos"
+            );
+          }
+          if (
+            config.gatewayTimeoutSec < 10 ||
+            config.gatewayTimeoutSec > 86400
+          ) {
+            throw new Error(
+              "Timeout de gateway deve estar entre 10 e 86400 segundos"
+            );
+          }
+
+          const result = await window.apiService.updateStatusConfig(config);
+
+          if (result.success) {
+            showTimeoutStatus("success", "Configurações salvas com sucesso!");
+            await loadSystemStatus();
+          } else {
+            throw new Error(result.error || "Erro desconhecido");
+          }
+        } catch (error) {
+          console.error(
+            "[Config] Erro ao salvar configurações de timeout:",
+            error
+          );
+          showTimeoutStatus("error", "Erro ao salvar: " + error.message);
+        }
+      }
+
+      function resetTimeoutConfig() {
+        document.getElementById("sensorTimeoutSec").value = 120;
+        document.getElementById("gatewayTimeoutSec").value = 60;
+        document.getElementById("warningThresholdSec").value = 60;
+        document.getElementById("checkIntervalSec").value = 30;
+        showTimeoutStatus(
+          "info",
+          "Valores restaurados aos padrões. Clique em Salvar para aplicar."
+        );
+      }
+
+      function showTimeoutStatus(type, message) {
+        const statusEl = document.getElementById("timeoutConfigStatus");
+        const colors = {
+          success: { bg: "#f0fdf4", border: "#10b981", text: "#065f46" },
+          error: { bg: "#fef2f2", border: "#ef4444", text: "#991b1b" },
+          info: { bg: "#eff6ff", border: "#3b82f6", text: "#1e40af" },
+        };
+        const color = colors[type] || colors.info;
+
+        statusEl.style.display = "block";
+        statusEl.style.background = color.bg;
+        statusEl.style.borderLeft = "3px solid " + color.border;
+        statusEl.style.padding = "10px";
+        statusEl.style.borderRadius = "5px";
+        statusEl.style.color = color.text;
+        statusEl.innerHTML = message;
+
+        // Auto-hide after 5 seconds for success/info
+        if (type !== "error") {
+          setTimeout(() => {
+            statusEl.style.display = "none";
+          }, 5000);
+        }
+      }
+
+      async function loadSystemStatus() {
+        const statusEl = document.getElementById("currentSystemStatus");
+        if (!statusEl) return;
+
+        try {
+          if (!window.apiService) {
+            statusEl.innerHTML =
+              '<p style="color: #ef4444;">API Service não disponível</p>';
+            return;
+          }
+
+          const status = await window.apiService.getSystemStatusSummary();
+
+          if (!status || !status.systemStatus) {
+            statusEl.innerHTML =
+              '<p style="color: #666;">Nenhum dado de status disponível</p>';
+            return;
+          }
+
+          const statusColors = {
+            healthy: "#10b981",
+            degraded: "#f59e0b",
+            critical: "#ef4444",
+            unknown: "#6b7280",
+          };
+
+          const statusLabels = {
+            healthy: "✅ Saudável",
+            degraded: "⚠️ Degradado",
+            critical: "🔴 Crítico",
+            unknown: "❓ Desconhecido",
+          };
+
+          const sensors = status.sensors || {};
+          const gateways = status.gateways || {};
+          const config = status.config || {};
+
+          statusEl.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+              <div style="text-align: center; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="font-size: 24px; font-weight: bold; color: ${
+                  statusColors[status.systemStatus]
+                };">
+                  ${statusLabels[status.systemStatus] || status.systemStatus}
+                </div>
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">Status Geral</div>
+              </div>
+              
+              <div style="padding: 15px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="font-weight: 600; margin-bottom: 8px;">Sensores</div>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                  <span style="color: #10b981;">🟢 ${sensors.online || 0}</span>
+                  <span style="color: #f59e0b;">🟡 ${
+                    sensors.warning || 0
+                  }</span>
+                  <span style="color: #ef4444;">🔴 ${
+                    sensors.offline || 0
+                  }</span>
+                </div>
+              </div>
+              
+              <div style="padding: 15px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="font-weight: 600; margin-bottom: 8px;">Gateways</div>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                  <span style="color: #10b981;">🟢 ${
+                    gateways.online || 0
+                  }</span>
+                  <span style="color: #f59e0b;">🟡 ${
+                    gateways.warning || 0
+                  }</span>
+                  <span style="color: #ef4444;">🔴 ${
+                    gateways.offline || 0
+                  }</span>
+                </div>
+              </div>
+              
+              <div style="padding: 15px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="font-weight: 600; margin-bottom: 8px;">Timeouts Ativos</div>
+                <div style="font-size: 11px; color: #666;">
+                  <div>Sensor: ${config.sensorTimeoutSec || "?"}s</div>
+                  <div>Gateway: ${config.gatewayTimeoutSec || "?"}s</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 10px; font-size: 11px; color: #999;">
+              Última atualização: ${new Date().toLocaleTimeString("pt-BR")}
+            </div>
+          `;
+        } catch (error) {
+          console.error("[Config] Erro ao carregar status do sistema:", error);
+          statusEl.innerHTML =
+            '<p style="color: #ef4444;">Erro ao carregar status: ' +
+            error.message +
+            "</p>";
+        }
+      }
+
       // Inicializar
       async function init() {
         console.log("[Config] Inicializando página...");
@@ -585,6 +938,17 @@
         if (window.apiService) {
           await loadCalibrationStatus();
           await loadSensorConfigs();
+          await loadTimeoutConfig();
+          await loadSystemStatus();
+
+          // Event listener para formulário de timeout
+          const timeoutForm = document.getElementById("timeoutConfigForm");
+          if (timeoutForm) {
+            timeoutForm.addEventListener("submit", saveTimeoutConfig);
+          }
+
+          // Atualizar status periodicamente
+          setInterval(loadSystemStatus, 30000);
         }
 
         console.log("[Config] Página inicializada");

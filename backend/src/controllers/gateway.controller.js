@@ -1,5 +1,6 @@
-import logger from '../config/logger.js';
-import pool from '../config/database.js';
+import logger from "../config/logger.js";
+import pool from "../config/database.js";
+import statusService from "../services/status.service.js";
 
 // Armazenar métricas do gateway em memória (últimas 24h)
 const gatewayMetrics = new Map();
@@ -15,7 +16,7 @@ export async function receiveGatewayMetrics(req, res) {
     if (!mac || !metrics) {
       return res.status(400).json({
         success: false,
-        error: 'MAC e métricas são obrigatórios',
+        error: "MAC e métricas são obrigatórios",
       });
     }
 
@@ -26,17 +27,27 @@ export async function receiveGatewayMetrics(req, res) {
       mac,
     });
 
-    logger.debug('Métricas do gateway recebidas', { mac, metrics });
+    // Registrar heartbeat do gateway no status service
+    statusService.recordGatewayHeartbeat(mac, {
+      mac,
+      ipAddress: metrics.ip_address || req.ip,
+      sensorsRelayed: metrics.packets_sent || 0,
+      uptime: metrics.uptime_seconds,
+      freeHeap: metrics.free_heap,
+      wifiRssi: metrics.wifi_rssi,
+    });
+
+    logger.debug("Métricas do gateway recebidas", { mac, metrics });
 
     return res.status(200).json({
       success: true,
-      message: 'Métricas recebidas',
+      message: "Métricas recebidas",
     });
   } catch (error) {
-    logger.error('Erro ao receber métricas do gateway:', error);
+    logger.error("Erro ao receber métricas do gateway:", error);
     return res.status(500).json({
       success: false,
-      error: 'Erro ao processar métricas',
+      error: "Erro ao processar métricas",
     });
   }
 }
@@ -48,12 +59,12 @@ export async function receiveGatewayMetrics(req, res) {
 export async function getGatewayMetrics(req, res) {
   try {
     const metrics = Array.from(gatewayMetrics.values())
-      .filter(m => {
+      .filter((m) => {
         // Filtrar métricas antigas (> 5 minutos sem atualização)
         const age = Date.now() - new Date(m.lastUpdate).getTime();
         return age < 5 * 60 * 1000;
       })
-      .map(m => ({
+      .map((m) => ({
         mac: m.mac,
         packets_received: m.packets_received || 0,
         packets_sent: m.packets_sent || 0,
@@ -76,10 +87,10 @@ export async function getGatewayMetrics(req, res) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('Erro ao obter métricas do gateway:', error);
+    logger.error("Erro ao obter métricas do gateway:", error);
     return res.status(500).json({
       success: false,
-      error: 'Erro ao obter métricas',
+      error: "Erro ao obter métricas",
     });
   }
 }
@@ -88,4 +99,3 @@ export default {
   receiveGatewayMetrics,
   getGatewayMetrics,
 };
-
