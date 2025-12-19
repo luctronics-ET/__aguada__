@@ -49,9 +49,8 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-postgres",
-        "postgresql://aguada_user:aguada_pass_2025@localhost:5433/aguada_db"
+        "postgresql://aguada_user:aguada123@localhost:5433/aguada_db"
       ]
     }
   }
 }
-

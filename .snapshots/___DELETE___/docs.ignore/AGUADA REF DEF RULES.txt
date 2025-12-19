@@ -10,6 +10,13 @@ se volume atual < volume anterior, consumo parcial = vol anterior - vol atual;
 tendencia = comparações com a media de consumo do quarto de hora - alto, normal, baixo, vazamento (consumo muito alto)
 consumo diário += consumo parcial
 
+
+delta = volume atual - volume anterior
+delta > 0 ==> volume atual > volune anterior, houve abastecimento de agua.
+detla < 0 ==> houve consumo de agua. consumo = if(delta<0) (consumo = -(delta)}
+ 
+
+
 titulo aba navegador: CMASM - Aguada
 
 sub paginas:

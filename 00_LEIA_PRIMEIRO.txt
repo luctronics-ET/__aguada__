@@ -1,82 +1,54 @@
 ╔════════════════════════════════════════════════════════════════════════╗
 ║                                                                        ║
-║  🎉 AGUADA v2.1.0 - PROJETO CONCLUÍDO! 🎉                            ║
+║  ⚠️  AVISO: Use a estrutura em ../firmware_aguada/ ⚠️               ║
 ║                                                                        ║
-║  Hydraulic Monitoring System - Production Ready                       ║
+║  Este diretório foi substituído por firmware_aguada/                 ║
+║  Consulte ../firmware_aguada/README.md para instruções               ║
 ║                                                                        ║
 ╚════════════════════════════════════════════════════════════════════════╝
 
-�� RESUMO DO QUE FOI FEITO
+📍 ESTRUTURA ATUALIZADA
 ═════════════════════════════════════════════════════════════════════════
 
-✅ Sistema AGUADA está 100% funcional!
+✅ Sistema AGUADA agora está em ../firmware_aguada/
 
-✅ Todos 8 endpoints da API testados e validados
-✅ Frontend dashboard carregando e funcional  
-✅ Database PostgreSQL + TimescaleDB operacional
-✅ 5 containers Docker rodando (postgres, redis, backend, nginx, grafana)
-✅ Todos os problemas foram corrigidos
+⚠️  ESTA VERSÃO FOI MOVIDA PARA ../firmware_aguada/
 
-🔧 PROBLEMAS CORRIGIDOS
+🔄 MIGRAÇÃO REALIZADA
 ═════════════════════════════════════════════════════════════════════════
 
-1. Database schema mismatches em alerts.controller.js
-   ✓ Corrigido 3 funções
-   ✓ 5 campos de SQL atualizados
-   ✓ Testado e validado
+Todo o código, configuração e scripts agora estão em:
+  📁 ../firmware_aguada/
 
-2. Docker build cache desatualizado
-   ✓ Rebuild executado
-   ✓ Código novo carregado
+Para continuar usando o AGUADA:
 
-3. Port conflicts (3000, 3001, 1883)
-   ✓ Portas liberadas
-   ✓ MQTT comentado em docker-compose.yml
+1️⃣  Acesse o diretório atualizado:
+  cd ../firmware_aguada
 
-📦 PACOTE PRONTO PARA DISTRIBUIÇÃO
+2️⃣  Leia o README principal:
+  cat README.md
+
+3️⃣  Siga as instruções de deploy:
+  • QUICKSTART.md - Início rápido
+  • INSTALLATION.md - Instalação completa
+  • README.md - Documentação
+
+📂 Estrutura de firmware_aguada/
 ═════════════════════════════════════════════════════════════════════════
 
-Arquivo:  aguada-v2.1.0-20251205_201922.tar.gz
-Tamanho:  1,7 MB (comprimido)
-SHA-256:  8c25a651c6f3252693bc46048f51d16b216e935fc3f4bfd8473aaced62b55522
-Local:    /home/luciano/Área de trabalho/aguada/
+firmware_aguada/
+  ├── backend/          → API Node.js/Express
+  ├── frontend/         → Dashboard HTML/CSS/JS
+  ├── firmware/         → Código ESP32 Arduino
+  ├── database/         → Schema PostgreSQL
+  ├── docker/           → Docker Compose
+  ├── docs/             → Documentação
+  ├── memory-bank/      → Contexto do projeto
+  └── scripts/          → Automação
 
-O pacote contém:
-  • Backend Node.js/Express completo
-  • Frontend HTML/CSS/JavaScript PWA
-  • Docker Compose (5 containers)
-  • Database schema PostgreSQL
-  • Firmware ESP32 fontes
-  • Scripts de deploy e teste
-  • Documentação 60+ páginas
-
-🚀 COMO USAR EM OUTRO COMPUTADOR
-═════════════════════════════════════════════════════════════════════════
-
-PASSO 1: Transferir o arquivo (1,7 MB)
-  • Via USB: Copiar para pen drive
-  • Via SCP: scp aguada-v2.1.0-*.tar.gz usuario@servidor:~/
-  • Via Cloud: Upload para Google Drive / OneDrive
-
-PASSO 2: No novo computador, ler o guia
-  Arquivo: PACKAGE_TRANSFER_GUIDE.md
-  
-  Este arquivo contém:
-  • Pré-requisitos (Docker, Docker Compose)
-  • Passo-a-passo de instalação
-  • Como validar se funcionou
-  • Troubleshooting
-
-PASSO 3: Executar deploy automático
-  tar xzf aguada-v2.1.0-*.tar.gz
-  cd aguada
-  bash deploy-automatic.sh
-  
-  O script faz tudo automaticamente:
-  • Verifica pré-requisitos
-  • Configura ambiente
-  • Inicia containers
-  • Testa sistema
+✅ Todos os arquivos estão consolidados em um único local
+✅ Use firmware_aguada/ como referência principal
+✅ Esta pasta (aguada/) pode ser usada como backup histórico
   
   Aguarde 5-10 minutos...
 
